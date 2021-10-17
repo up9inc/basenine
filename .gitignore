@@ -19,3 +19,6 @@
 
 # Database File
 data.bin
+
+# Build Directory
+build/

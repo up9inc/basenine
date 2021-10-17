@@ -18,7 +18,7 @@ Schema-free, document-oriented streaming database that optimized for monitoring 
 
 Run the server:
 
-`cd server/ && go run server.go -port 8000`
+`make && build/basenine -port 8000`
 
 The database server has three modes:
 
