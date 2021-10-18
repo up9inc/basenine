@@ -209,7 +209,7 @@ true and !(5 == a)
 
 func TestSubExpression(t *testing.T) {
 	text := `
-	(a.b == "hello") and (x.y > 3.14)
+(a.b == "hello") and (x.y > 3.14)
 	`
 	expr, err := Parse(text)
 	if err != nil {

@@ -27,6 +27,8 @@ func stringOperand(operand interface{}) string {
 	switch operand.(type) {
 	case string:
 		_operand = operand.(string)
+	case int64:
+		_operand = strconv.FormatInt(operand.(int64), 10)
 	case float64:
 		_operand = strconv.FormatFloat(operand.(float64), 'g', 6, 64)
 	case bool:
@@ -123,6 +125,8 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 		} else {
 			v = result[0]
 		}
+	} else if pri.SubExpression != nil {
+		v, err = evalExpression(pri.SubExpression, obj)
 	} else {
 		v = false
 	}
