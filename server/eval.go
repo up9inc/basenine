@@ -58,7 +58,7 @@ var equalityOperations = map[string]interface{}{
 	"!=": neq,
 }
 
-func EvalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
+func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 	if pri.Bool != nil {
 		v = *pri.Bool
 	} else if pri.Number != nil {
@@ -71,19 +71,19 @@ func EvalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 	return
 }
 
-func EvalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
-	return EvalPrimary(unar.Primary, obj)
+func evalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
+	return evalPrimary(unar.Primary, obj)
 }
 
-func EvalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
-	unar, err := EvalUnary(logic.Unary, obj)
+func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
+	unar, err := evalUnary(logic.Unary, obj)
 	if err != nil {
 		return
 	}
 
 	var next interface{}
 	if logic.Next != nil {
-		next, err = EvalLogical(logic.Next, obj)
+		next, err = evalLogical(logic.Next, obj)
 		if err != nil {
 			return
 		}
@@ -96,19 +96,19 @@ func EvalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
 	return
 }
 
-func EvalComparison(comp *Comparison, obj interface{}) (v interface{}, err error) {
-	return EvalLogical(comp.Logical, obj)
+func evalComparison(comp *Comparison, obj interface{}) (v interface{}, err error) {
+	return evalLogical(comp.Logical, obj)
 }
 
-func EvalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
-	logical, err := EvalComparison(equ.Comparison, obj)
+func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
+	logical, err := evalComparison(equ.Comparison, obj)
 	if err != nil {
 		return
 	}
 
 	var next interface{}
 	if equ.Next != nil {
-		next, err = EvalEquality(equ.Next, obj)
+		next, err = evalEquality(equ.Next, obj)
 		if err != nil {
 			return
 		}
@@ -121,8 +121,8 @@ func EvalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
 	return
 }
 
-func EvalExpression(expr *Expression, obj interface{}) (truth bool, err error) {
-	v, err := EvalEquality(expr.Equality, obj)
+func evalExpression(expr *Expression, obj interface{}) (truth bool, err error) {
+	v, err := evalEquality(expr.Equality, obj)
 	truth = v.(bool)
 	return
 }
@@ -133,6 +133,6 @@ func Eval(expr *Expression, json string) (truth bool, err error) {
 		return
 	}
 
-	truth, err = EvalExpression(expr, obj)
+	truth, err = evalExpression(expr, obj)
 	return
 }
