@@ -10,7 +10,10 @@ func TestBasicBoolean(t *testing.T) {
 	text := `
 http or !amqp
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "http"
@@ -52,7 +55,10 @@ func TestBooleanLiterals(t *testing.T) {
 	text := `
 true and false
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := true
@@ -84,7 +90,10 @@ func TestCompoundBoolean(t *testing.T) {
 	text := `
 true and 5 == a
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := true
@@ -134,7 +143,10 @@ func TestNegatedCompoundBoolean(t *testing.T) {
 	text := `
 true and !(5 == a)
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := true
@@ -199,7 +211,10 @@ func TestSubExpression(t *testing.T) {
 	text := `
 	(a.b == "hello") and (x.y > 3.14)
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "a.b"
@@ -286,7 +301,10 @@ func TestRegexLiteral(t *testing.T) {
 	text := `
 http.request == r"hello"
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "http.request"
@@ -327,7 +345,10 @@ func TestComplexQuery(t *testing.T) {
 	text := `
 http and request.method == "GET" and request.path == "/example" and (request.query.a == "b" or request.headers.x == "y")
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "http"
@@ -463,7 +484,10 @@ func TestSelectExpressionIndex(t *testing.T) {
 	text := `
 http.request.path[1] == "hello"
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "http.request.path"
@@ -507,7 +531,10 @@ func TestSelectExpressionKey(t *testing.T) {
 	text := `
 !http.request.headers["user-agent"] == "kube-probe"
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "http.request.headers"
@@ -555,7 +582,10 @@ func TestFunctionCall(t *testing.T) {
 	text := `
 a.b(3, 5)
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "a.b"
@@ -617,7 +647,10 @@ func TestSelectExpressionChainFunction(t *testing.T) {
 	text := `
 !http or !http.request.headers["user-agent"].startsWith("kube-probe")
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "http"
@@ -716,7 +749,10 @@ rule(
 	assert: response.elapsedTime >= 1
 )
 	`
-	expr := Parse(text)
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// repr.Println(expr)
 
 	val1 := "rule"
@@ -1090,4 +1126,20 @@ rule(
 	}
 
 	assert.Equal(t, expect, expr)
+}
+
+func TestSyntaxErrorLiteralNotTerminated(t *testing.T) {
+	text := `
+=.="
+	`
+	_, err := Parse(text)
+	assert.EqualError(t, err, "2:5: literal not terminated")
+}
+
+func TestSyntaxErrorUnexpectedToken(t *testing.T) {
+	text := `
+http.request.path[3.14] == "hello"
+	`
+	_, err := Parse(text)
+	assert.EqualError(t, err, "2:19: unexpected token \"3.14\" (expected (<string> | <char> | <rawstring>) \"]\")")
 }

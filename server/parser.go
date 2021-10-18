@@ -61,12 +61,8 @@ type Parameter struct {
 
 var parser = participle.MustBuild(&Expression{}, participle.UseLookahead(2))
 
-func Parse(text string) *Expression {
-	expr := &Expression{}
-	err := parser.ParseString("", text, expr)
-	if err != nil {
-		panic(err)
-	}
-
-	return expr
+func Parse(text string) (expr *Expression, err error) {
+	expr = &Expression{}
+	err = parser.ParseString("", text, expr)
+	return
 }

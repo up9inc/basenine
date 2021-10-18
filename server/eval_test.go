@@ -38,7 +38,10 @@ var data = []struct {
 
 func TestEval(t *testing.T) {
 	for _, row := range data {
-		expr := Parse(row.query)
+		expr, err := Parse(row.query)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
 		truth, err := Eval(expr, row.json)
 		if err != nil {
 			t.Fatal(err.Error())
