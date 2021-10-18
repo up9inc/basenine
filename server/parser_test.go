@@ -491,7 +491,8 @@ http.request.path[1] == "hello"
 	// repr.Println(expr)
 
 	val1 := "http.request.path"
-	val2 := "\"hello\""
+	val2 := 1
+	val3 := "\"hello\""
 
 	expect := &Expression{
 		Equality: &Equality{
@@ -502,7 +503,7 @@ http.request.path[1] == "hello"
 							CallExpression: &CallExpression{
 								Identifier: &val1,
 								SelectExpression: &SelectExpression{
-									Index: 1,
+									Index: &val2,
 								},
 							},
 						},
@@ -515,7 +516,7 @@ http.request.path[1] == "hello"
 					Logical: &Logical{
 						Unary: &Unary{
 							Primary: &Primary{
-								String: &val2,
+								String: &val3,
 							},
 						},
 					},

@@ -2,6 +2,7 @@ package main
 
 import (
 	"strconv"
+	"strings"
 
 	oj "github.com/ohler55/ojg/oj"
 )
@@ -114,7 +115,9 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 	} else if pri.Number != nil {
 		v = *pri.Number
 	} else if pri.String != nil {
-		v = *pri.String
+		v = strings.Trim(*pri.String, "\"")
+	} else if pri.JsonPath != nil {
+		v = pri.JsonPath.Get(obj)[0]
 	} else {
 		v = false
 	}

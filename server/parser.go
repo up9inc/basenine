@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/alecthomas/participle/v2"
+	jp "github.com/ohler55/ojg/jp"
 )
 
 type Expression struct {
@@ -40,6 +41,7 @@ type Primary struct {
 	Nil            bool            `| @"nil"`
 	CallExpression *CallExpression `| @@`
 	SubExpression  *Expression     `| "(" @@ ")" `
+	JsonPath       *jp.Expr
 }
 
 type CallExpression struct {
@@ -49,7 +51,7 @@ type CallExpression struct {
 }
 
 type SelectExpression struct {
-	Index      int         `[ "[" @Int "]" ]`
+	Index      *int        `[ "[" @Int "]" ]`
 	Key        *string     `[ "[" @(String|Char|RawString) "]" ]`
 	Expression *Expression `[ "." @@ ]`
 }
