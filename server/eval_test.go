@@ -20,6 +20,9 @@ var data = []struct {
 	{`false or true`, `{}`, true},
 	{`true or false`, `{}`, true},
 	{`false or false`, `{}`, false},
+	{`true and 5`, `{}`, true},
+	{`false and 5`, `{}`, false},
+	{`true and 0`, `{}`, false},
 }
 
 func TestEval(t *testing.T) {

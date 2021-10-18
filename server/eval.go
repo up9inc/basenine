@@ -4,12 +4,23 @@ import (
 	oj "github.com/ohler55/ojg/oj"
 )
 
-func and(operand1 bool, operand2 bool) bool {
-	return operand1 && operand2
+func boolOperand(operand interface{}) bool {
+	var _operand bool
+	switch operand.(type) {
+	case bool:
+		_operand = operand.(bool)
+	case float64:
+		_operand = operand.(float64) > 0
+	}
+	return _operand
 }
 
-func or(operand1 bool, operand2 bool) bool {
-	return operand1 || operand2
+func and(operand1 interface{}, operand2 interface{}) bool {
+	return boolOperand(operand1) && boolOperand(operand2)
+}
+
+func or(operand1 interface{}, operand2 interface{}) bool {
+	return boolOperand(operand1) || boolOperand(operand2)
 }
 
 var logicalOperations = map[string]interface{}{
@@ -17,44 +28,48 @@ var logicalOperations = map[string]interface{}{
 	"or":  or,
 }
 
-func EvalPrimary(pri *Primary, obj interface{}) (truth bool, err error) {
+func EvalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 	if pri.Bool != nil {
-		truth = *pri.Bool
+		v = *pri.Bool
+	} else if pri.Number != nil {
+		v = *pri.Number
 	}
 	return
 }
 
-func EvalUnary(unar *Unary, obj interface{}) (truth bool, err error) {
+func EvalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
 	return EvalPrimary(unar.Primary, obj)
 }
 
-func EvalLogical(logic *Logical, obj interface{}) (truth bool, err error) {
+func EvalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
 	unar, err := EvalUnary(logic.Unary, obj)
 	if err != nil {
 		return
 	}
-	var next bool
+	var next interface{}
 
 	if logic.Next != nil {
 		next, err = EvalLogical(logic.Next, obj)
 		if err != nil {
 			return
 		}
-		truth = logicalOperations[logic.Op].(func(bool, bool) bool)(unar, next)
+		v = logicalOperations[logic.Op].(func(interface{}, interface{}) bool)(unar, next)
 		return
 	} else {
-		truth = unar
+		v = unar
 	}
 
 	return
 }
 
-func EvalComparison(comp *Comparison, obj interface{}) (truth bool, err error) {
+func EvalComparison(comp *Comparison, obj interface{}) (v interface{}, err error) {
 	return EvalLogical(comp.Logical, obj)
 }
 
 func EvalEquality(equ *Equality, obj interface{}) (truth bool, err error) {
-	return EvalComparison(equ.Comparison, obj)
+	v, err := EvalComparison(equ.Comparison, obj)
+	truth = v.(bool)
+	return
 }
 
 func EvalExpression(expr *Expression, obj interface{}) (truth bool, err error) {
