@@ -43,17 +43,17 @@ const (
 
 const DB_FILE string = "data.bin"
 
-func equ(operand1 string, operand2 string) bool {
+func equx(operand1 string, operand2 string) bool {
 	return operand1 == operand2
 }
 
-func neq(operand1 string, operand2 string) bool {
+func neqx(operand1 string, operand2 string) bool {
 	return operand1 != operand2
 }
 
 var operations = map[string]interface{}{
-	"==": equ,
-	"!=": neq,
+	"==": equx,
+	"!=": neqx,
 }
 
 var connections []net.Conn
