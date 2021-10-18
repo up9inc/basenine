@@ -39,6 +39,8 @@ var data = []struct {
 	{`41 >= 42`, `{}`, false},
 	{`13 < 42`, `{}`, true},
 	{`42 < 13`, `{}`, false},
+	{`!true`, `{}`, false},
+	{`-300 < 42`, `{}`, true},
 }
 
 func TestEval(t *testing.T) {

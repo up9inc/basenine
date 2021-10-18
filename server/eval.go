@@ -122,7 +122,26 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 }
 
 func evalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
-	return evalPrimary(unar.Primary, obj)
+	if unar.Unary != nil {
+		v, err = evalUnary(unar.Unary, obj)
+		if err != nil {
+			return
+		}
+		switch v.(type) {
+		case bool:
+			if unar.Op == "!" {
+				v = !v.(bool)
+			}
+		case float64:
+			if unar.Op == "-" {
+				v = -v.(float64)
+			}
+		}
+	} else {
+		v, err = evalPrimary(unar.Primary, obj)
+	}
+
+	return
 }
 
 func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
