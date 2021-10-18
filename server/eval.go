@@ -220,6 +220,10 @@ func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
 }
 
 func evalExpression(expr *Expression, obj interface{}) (truth bool, err error) {
+	if expr.Equality == nil {
+		truth = true
+		return
+	}
 	v, err := evalEquality(expr.Equality, obj)
 	truth = v.(bool)
 	return

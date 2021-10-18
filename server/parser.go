@@ -65,6 +65,9 @@ var parser = participle.MustBuild(&Expression{}, participle.UseLookahead(2))
 
 func Parse(text string) (expr *Expression, err error) {
 	expr = &Expression{}
+	if text == "" {
+		return
+	}
 	err = parser.ParseString("", text, expr)
 	return
 }

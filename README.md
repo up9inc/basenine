@@ -201,9 +201,7 @@ Connecting to localhost:8000...
 ## TODOS
 
 - Make the protocol binary to improve the transmission speed.
-- Add lexer, parser, AST to really implement the query syntax.
 - Improve the querying speed by keep tracking checksums of strings.
 - Write a client library for Go and Python.
-- Add tests.
 - Improve logging, introduce debug level.
 - Implement mechanisms to reduce data redundancy.

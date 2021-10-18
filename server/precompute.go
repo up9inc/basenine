@@ -74,6 +74,9 @@ func computeEquality(equ *Equality, returnPath bool) (path string, err error) {
 }
 
 func computeExpression(expr *Expression, returnPath bool) (path string, err error) {
+	if expr.Equality == nil {
+		return
+	}
 	path, err = computeEquality(expr.Equality, returnPath)
 	return
 }

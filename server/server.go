@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,9 +15,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	jp "github.com/ohler55/ojg/jp"
-	oj "github.com/ohler55/ojg/oj"
 )
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
@@ -42,19 +38,6 @@ const (
 )
 
 const DB_FILE string = "data.bin"
-
-func equx(operand1 string, operand2 string) bool {
-	return operand1 == operand2
-}
-
-func neqx(operand1 string, operand2 string) bool {
-	return operand1 != operand2
-}
-
-var operations = map[string]interface{}{
-	"==": equx,
-	"!=": neqx,
-}
 
 var connections []net.Conn
 
@@ -251,31 +234,11 @@ func readRecord(f *os.File, seek int64) (b []byte, n int64, err error) {
 }
 
 func streamRecords(conn net.Conn, data []byte) (err error) {
-	var path, value, operator string
-	var qs []string
-
 	query := string(data)
-
-	if len(strings.TrimSpace(query)) != 0 {
-		for key, _ := range operations {
-			if strings.Contains(query, key) {
-				operator = key
-				qs = strings.Split(query, key)
-			}
-		}
-
-		if operator == "" {
-			err = errors.New("Unidentified operation.")
-		}
-
-		path = strings.TrimSpace(qs[0])
-		value = strings.TrimSpace(qs[1])
-		value = strings.Trim(value, "\"")
-
-		fmt.Printf("path: %v\n", path)
-		fmt.Printf("value: %v\n", value)
-		fmt.Printf("operator: %v\n", operator)
-	}
+	expr, err := Parse(query)
+	check(err)
+	err = ComputeJsonPaths(expr)
+	check(err)
 
 	var n int64 = 0
 	var i int = 0
@@ -295,13 +258,8 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				break
 			}
 
-			var truth bool
-			if path != "" {
-				truth, err = JsonPath(path, string(b), value, operator)
-				check(err)
-			} else {
-				truth = true
-			}
+			truth, err := Eval(expr, string(b))
+			check(err)
 
 			if truth {
 				conn.Write([]byte(fmt.Sprintf("%s\n", b)))
@@ -311,50 +269,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		f.Close()
 		i++
 	}
-}
-
-func JsonPath(path string, text string, ref string, operator string) (truth bool, err error) {
-	obj, err := oj.ParseString(text)
-	if err != nil {
-		return
-	}
-
-	x, err := jp.ParseString(path)
-	if err != nil {
-		return
-	}
-	result := x.Get(obj)
-
-	var exists bool
-	var value string
-
-	if len(result) < 1 {
-		exists = false
-	} else {
-		exists = true
-		switch result[0].(type) {
-		case string:
-			value = result[0].(string)
-		case int64:
-			value = strconv.FormatInt(result[0].(int64), 10)
-		case float64:
-			value = strconv.FormatFloat(result[0].(float64), 'g', 6, 64)
-		case bool:
-			value = strconv.FormatBool(result[0].(bool))
-		case nil:
-			value = "null"
-		default:
-			exists = false
-		}
-	}
-
-	if exists {
-		truth = operations[operator].(func(string, string) bool)(value, ref)
-	} else if operator == "!=" {
-		truth = true
-	}
-
-	return
 }
 
 func retrieveSingle(conn net.Conn, data []byte) (err error) {
