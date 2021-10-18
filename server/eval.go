@@ -117,7 +117,12 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 	} else if pri.String != nil {
 		v = strings.Trim(*pri.String, "\"")
 	} else if pri.JsonPath != nil {
-		v = pri.JsonPath.Get(obj)[0]
+		result := pri.JsonPath.Get(obj)
+		if len(result) < 1 {
+			v = false
+		} else {
+			v = result[0]
+		}
 	} else {
 		v = false
 	}
