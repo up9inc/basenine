@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	oj "github.com/ohler55/ojg/oj"
 )
@@ -15,6 +16,8 @@ func boolOperand(operand interface{}) bool {
 		_operand = operand.(string) != ""
 	case bool:
 		_operand = operand.(bool)
+	case int64:
+		_operand = operand.(int64) > 0
 	case float64:
 		_operand = operand.(float64) > 0
 	case nil:
@@ -49,6 +52,8 @@ func float64Operand(operand interface{}) float64 {
 		} else {
 			_operand = 0
 		}
+	case int64:
+		_operand = float64(operand.(int64))
 	case float64:
 		_operand = operand.(float64)
 	case bool:
@@ -132,22 +137,34 @@ var comparisonOperations = map[string]interface{}{
 	"<=": leq,
 }
 
-func startsWith(args ...interface{}) bool {
+func startsWith(args ...interface{}) interface{} {
 	return strings.HasPrefix(args[0].(string), args[1].(string))
 }
 
-func endsWith(args ...interface{}) bool {
+func endsWith(args ...interface{}) interface{} {
 	return strings.HasSuffix(args[0].(string), args[1].(string))
 }
 
-func contains(args ...interface{}) bool {
+func contains(args ...interface{}) interface{} {
 	return strings.Contains(args[0].(string), args[1].(string))
+}
+
+func datetime(args ...interface{}) interface{} {
+	layout := "01/02/2006 3:04:05 PM"
+	t, err := time.Parse(layout, args[1].(string))
+	if err != nil {
+		return false
+	} else {
+		timestamp := t.Unix()
+		return timestamp
+	}
 }
 
 var helpers = map[string]interface{}{
 	"startsWith": startsWith,
 	"endsWith":   endsWith,
 	"contains":   contains,
+	"datetime":   datetime,
 }
 
 func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err error) {
@@ -196,7 +213,7 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 			var params []interface{}
 			params, err = evalParameters(pri.CallExpression.Parameters, obj)
 			params = append([]interface{}{v}, params...)
-			v = helpers[*pri.Helper].(func(args ...interface{}) bool)(params...)
+			v = helpers[*pri.Helper].(func(args ...interface{}) interface{})(params...)
 		}
 	} else if pri.Regexp != nil {
 		v = pri.Regexp
