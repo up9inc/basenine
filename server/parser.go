@@ -45,6 +45,7 @@ type Primary struct {
 	SubExpression  *Expression     `| "(" @@ ")" `
 	JsonPath       *jp.Expr
 	Regexp         *regexp.Regexp
+	Helper         *string
 }
 
 type CallExpression struct {

@@ -8,7 +8,7 @@ import (
 	jp "github.com/ohler55/ojg/jp"
 )
 
-func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, path string, err error) {
+func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, helper *string, path string, err error) {
 	if call.Parameters == nil {
 		if call.Identifier != nil {
 			path = *call.Identifier
@@ -25,9 +25,16 @@ func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *
 				return
 			}
 		}
+	} else {
+		path = *call.Identifier
 	}
 	path = fmt.Sprintf("%s.%s", prependPath, path)
 	_jsonPath, err := jp.ParseString(path)
+	if call.Parameters != nil {
+		segments := strings.Split(path, ".")
+		helper = &segments[len(segments)-1]
+		_jsonPath = _jsonPath[:len(_jsonPath)-1]
+	}
 	jsonPath = &_jsonPath
 	return
 }
@@ -36,7 +43,7 @@ func computePrimary(pri *Primary, prependPath string) (path string, err error) {
 	if pri.SubExpression != nil {
 		path, err = computeExpression(pri.SubExpression, prependPath)
 	} else if pri.CallExpression != nil {
-		pri.JsonPath, path, err = computeCallExpression(pri.CallExpression, prependPath)
+		pri.JsonPath, pri.Helper, path, err = computeCallExpression(pri.CallExpression, prependPath)
 	} else if pri.Regex != nil {
 		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}

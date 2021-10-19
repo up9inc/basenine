@@ -132,6 +132,33 @@ var comparisonOperations = map[string]interface{}{
 	"<=": leq,
 }
 
+func startsWith(args ...interface{}) bool {
+	return strings.HasPrefix(args[0].(string), args[1].(string))
+}
+
+func endsWith(args ...interface{}) bool {
+	return strings.HasSuffix(args[0].(string), args[1].(string))
+}
+
+func contains(args ...interface{}) bool {
+	return strings.Contains(args[0].(string), args[1].(string))
+}
+
+var helpers = map[string]interface{}{
+	"startsWith": startsWith,
+	"endsWith":   endsWith,
+	"contains":   contains,
+}
+
+func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err error) {
+	for _, param := range params {
+		var v interface{}
+		v, err = evalExpression(param.Expression, obj)
+		vs = append(vs, v)
+	}
+	return
+}
+
 func evalSelectExpression(sel *SelectExpression, obj interface{}) (v interface{}, err error) {
 	if sel.Expression != nil {
 		v, err = evalExpression(sel.Expression, obj)
@@ -163,6 +190,13 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 			v = false
 		} else {
 			v = result[0]
+		}
+
+		if pri.Helper != nil && pri.CallExpression != nil {
+			var params []interface{}
+			params, err = evalParameters(pri.CallExpression.Parameters, obj)
+			params = append([]interface{}{v}, params...)
+			v = helpers[*pri.Helper].(func(args ...interface{}) bool)(params...)
 		}
 	} else if pri.Regexp != nil {
 		v = pri.Regexp
