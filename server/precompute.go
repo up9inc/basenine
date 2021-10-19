@@ -18,7 +18,7 @@ func computeCallExpression(call *CallExpression) (jsonPath *jp.Expr, path string
 			if call.SelectExpression.Index != nil {
 				path = fmt.Sprintf("%s[%d]", path, *call.SelectExpression.Index)
 			} else if call.SelectExpression.Key != nil {
-				path = fmt.Sprintf("%s.%s", path, *call.SelectExpression.Key)
+				path = fmt.Sprintf("%s[\"%s\"]", path, strings.Trim(*call.SelectExpression.Key, "\""))
 			} else if call.SelectExpression.Expression != nil {
 				_path, err = computeExpression(call.SelectExpression.Expression, true)
 				path = fmt.Sprintf("%s.%s", path, _path)
