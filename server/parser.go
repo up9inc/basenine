@@ -8,7 +8,13 @@ import (
 )
 
 type Expression struct {
+	Logical *Logical `@@`
+}
+
+type Logical struct {
 	Equality *Equality `@@`
+	Op       string    `[ @( "and" | "or" )`
+	Next     *Logical  `  @@ ]`
 }
 
 type Equality struct {
@@ -18,15 +24,9 @@ type Equality struct {
 }
 
 type Comparison struct {
-	Logical *Logical    `@@`
-	Op      string      `[ @( ">" "=" | ">" | "<" "=" | "<" )`
-	Next    *Comparison `  @@ ]`
-}
-
-type Logical struct {
-	Unary *Unary   `@@`
-	Op    string   `[ @( "and" | "or" )`
-	Next  *Logical `  @@ ]`
+	Unary *Unary      `@@`
+	Op    string      `[ @( ">" "=" | ">" | "<" "=" | "<" )`
+	Next  *Comparison `  @@ ]`
 }
 
 type Unary struct {

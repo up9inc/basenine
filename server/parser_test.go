@@ -20,9 +20,9 @@ http or !amqp
 	val2 := "amqp"
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							CallExpression: &CallExpression{
@@ -30,8 +30,12 @@ http or !amqp
 							},
 						},
 					},
-					Op: "or",
-					Next: &Logical{
+				},
+			},
+			Op: "or",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Op: "!",
 							Unary: &Unary{
@@ -64,16 +68,20 @@ true and false
 	val1 := true
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							Bool: &val1,
 						},
 					},
-					Op: "and",
-					Next: &Logical{
+				},
+			},
+			Op: "and",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{},
 						},
@@ -101,32 +109,34 @@ true and 5 == a
 	val3 := "a"
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							Bool: &val1,
 						},
 					},
-					Op: "and",
-					Next: &Logical{
+				},
+			},
+			Op: "and",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{
 								Number: &val2,
 							},
 						},
 					},
-				},
-			},
-			Op: "==",
-			Next: &Equality{
-				Comparison: &Comparison{
-					Logical: &Logical{
-						Unary: &Unary{
-							Primary: &Primary{
-								CallExpression: &CallExpression{
-									Identifier: &val3,
+					Op: "==",
+					Next: &Equality{
+						Comparison: &Comparison{
+							Unary: &Unary{
+								Primary: &Primary{
+									CallExpression: &CallExpression{
+										Identifier: &val3,
+									},
 								},
 							},
 						},
@@ -154,35 +164,37 @@ true and !(5 == a)
 	val3 := "a"
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							Bool: &val1,
 						},
 					},
-					Op: "and",
-					Next: &Logical{
+				},
+			},
+			Op: "and",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Op: "!",
 							Unary: &Unary{
 								Primary: &Primary{
 									SubExpression: &Expression{
-										Equality: &Equality{
-											Comparison: &Comparison{
-												Logical: &Logical{
+										Logical: &Logical{
+											Equality: &Equality{
+												Comparison: &Comparison{
 													Unary: &Unary{
 														Primary: &Primary{
 															Number: &val2,
 														},
 													},
 												},
-											},
-											Op: "==",
-											Next: &Equality{
-												Comparison: &Comparison{
-													Logical: &Logical{
+												Op: "==",
+												Next: &Equality{
+													Comparison: &Comparison{
 														Unary: &Unary{
 															Primary: &Primary{
 																CallExpression: &CallExpression{
@@ -223,15 +235,15 @@ func TestSubExpression(t *testing.T) {
 	val4 := 3.14
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							SubExpression: &Expression{
-								Equality: &Equality{
-									Comparison: &Comparison{
-										Logical: &Logical{
+								Logical: &Logical{
+									Equality: &Equality{
+										Comparison: &Comparison{
 											Unary: &Unary{
 												Primary: &Primary{
 													CallExpression: &CallExpression{
@@ -240,11 +252,9 @@ func TestSubExpression(t *testing.T) {
 												},
 											},
 										},
-									},
-									Op: "==",
-									Next: &Equality{
-										Comparison: &Comparison{
-											Logical: &Logical{
+										Op: "==",
+										Next: &Equality{
+											Comparison: &Comparison{
 												Unary: &Unary{
 													Primary: &Primary{
 														String: &val2,
@@ -257,14 +267,18 @@ func TestSubExpression(t *testing.T) {
 							},
 						},
 					},
-					Op: "and",
-					Next: &Logical{
+				},
+			},
+			Op: "and",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{
 								SubExpression: &Expression{
-									Equality: &Equality{
-										Comparison: &Comparison{
-											Logical: &Logical{
+									Logical: &Logical{
+										Equality: &Equality{
+											Comparison: &Comparison{
 												Unary: &Unary{
 													Primary: &Primary{
 														CallExpression: &CallExpression{
@@ -272,10 +286,8 @@ func TestSubExpression(t *testing.T) {
 														},
 													},
 												},
-											},
-											Op: ">",
-											Next: &Comparison{
-												Logical: &Logical{
+												Op: ">",
+												Next: &Comparison{
 													Unary: &Unary{
 														Primary: &Primary{
 															Number: &val4,
@@ -311,9 +323,9 @@ request == r"hello.*"
 	val2 := "\"hello.*\""
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							CallExpression: &CallExpression{
@@ -322,11 +334,9 @@ request == r"hello.*"
 						},
 					},
 				},
-			},
-			Op: "==",
-			Next: &Equality{
-				Comparison: &Comparison{
-					Logical: &Logical{
+				Op: "==",
+				Next: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{
 								Regex: &val2,
@@ -362,9 +372,9 @@ http and request.method == "GET" and request.path == "/example" and (request.que
 	val9 := "\"y\""
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							CallExpression: &CallExpression{
@@ -372,8 +382,12 @@ http and request.method == "GET" and request.path == "/example" and (request.que
 							},
 						},
 					},
-					Op: "and",
-					Next: &Logical{
+				},
+			},
+			Op: "and",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{
 								CallExpression: &CallExpression{
@@ -382,19 +396,21 @@ http and request.method == "GET" and request.path == "/example" and (request.que
 							},
 						},
 					},
-				},
-			},
-			Op: "==",
-			Next: &Equality{
-				Comparison: &Comparison{
-					Logical: &Logical{
-						Unary: &Unary{
-							Primary: &Primary{
-								String: &val3,
+					Op: "==",
+					Next: &Equality{
+						Comparison: &Comparison{
+							Unary: &Unary{
+								Primary: &Primary{
+									String: &val3,
+								},
 							},
 						},
-						Op: "and",
-						Next: &Logical{
+					},
+				},
+				Op: "and",
+				Next: &Logical{
+					Equality: &Equality{
+						Comparison: &Comparison{
 							Unary: &Unary{
 								Primary: &Primary{
 									CallExpression: &CallExpression{
@@ -403,25 +419,27 @@ http and request.method == "GET" and request.path == "/example" and (request.que
 								},
 							},
 						},
-					},
-				},
-				Op: "==",
-				Next: &Equality{
-					Comparison: &Comparison{
-						Logical: &Logical{
-							Unary: &Unary{
-								Primary: &Primary{
-									String: &val5,
+						Op: "==",
+						Next: &Equality{
+							Comparison: &Comparison{
+								Unary: &Unary{
+									Primary: &Primary{
+										String: &val5,
+									},
 								},
 							},
-							Op: "and",
-							Next: &Logical{
+						},
+					},
+					Op: "and",
+					Next: &Logical{
+						Equality: &Equality{
+							Comparison: &Comparison{
 								Unary: &Unary{
 									Primary: &Primary{
 										SubExpression: &Expression{
-											Equality: &Equality{
-												Comparison: &Comparison{
-													Logical: &Logical{
+											Logical: &Logical{
+												Equality: &Equality{
+													Comparison: &Comparison{
 														Unary: &Unary{
 															Primary: &Primary{
 																CallExpression: &CallExpression{
@@ -430,32 +448,32 @@ http and request.method == "GET" and request.path == "/example" and (request.que
 															},
 														},
 													},
-												},
-												Op: "==",
-												Next: &Equality{
-													Comparison: &Comparison{
-														Logical: &Logical{
+													Op: "==",
+													Next: &Equality{
+														Comparison: &Comparison{
 															Unary: &Unary{
 																Primary: &Primary{
 																	String: &val7,
 																},
 															},
-															Op: "or",
-															Next: &Logical{
-																Unary: &Unary{
-																	Primary: &Primary{
-																		CallExpression: &CallExpression{
-																			Identifier: &val8,
-																		},
+														},
+													},
+												},
+												Op: "or",
+												Next: &Logical{
+													Equality: &Equality{
+														Comparison: &Comparison{
+															Unary: &Unary{
+																Primary: &Primary{
+																	CallExpression: &CallExpression{
+																		Identifier: &val8,
 																	},
 																},
 															},
 														},
-													},
-													Op: "==",
-													Next: &Equality{
-														Comparison: &Comparison{
-															Logical: &Logical{
+														Op: "==",
+														Next: &Equality{
+															Comparison: &Comparison{
 																Unary: &Unary{
 																	Primary: &Primary{
 																		String: &val9,
@@ -495,9 +513,9 @@ request.path[1] == "hello"
 	val3 := "\"hello\""
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							CallExpression: &CallExpression{
@@ -509,11 +527,9 @@ request.path[1] == "hello"
 						},
 					},
 				},
-			},
-			Op: "==",
-			Next: &Equality{
-				Comparison: &Comparison{
-					Logical: &Logical{
+				Op: "==",
+				Next: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{
 								String: &val3,
@@ -543,9 +559,9 @@ func TestSelectExpressionKey(t *testing.T) {
 	val3 := "\"kube-probe\""
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Op: "!",
 						Unary: &Unary{
@@ -560,11 +576,9 @@ func TestSelectExpressionKey(t *testing.T) {
 						},
 					},
 				},
-			},
-			Op: "==",
-			Next: &Equality{
-				Comparison: &Comparison{
-					Logical: &Logical{
+				Op: "==",
+				Next: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{
 								String: &val3,
@@ -594,19 +608,19 @@ a.b(3, 5)
 	val3 := float64(5)
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							CallExpression: &CallExpression{
 								Identifier: &val1,
 								Parameters: []*Parameter{
-									{
+									&Parameter{
 										Expression: &Expression{
-											Equality: &Equality{
-												Comparison: &Comparison{
-													Logical: &Logical{
+											Logical: &Logical{
+												Equality: &Equality{
+													Comparison: &Comparison{
 														Unary: &Unary{
 															Primary: &Primary{
 																Number: &val2,
@@ -617,11 +631,11 @@ a.b(3, 5)
 											},
 										},
 									},
-									{
+									&Parameter{
 										Expression: &Expression{
-											Equality: &Equality{
-												Comparison: &Comparison{
-													Logical: &Logical{
+											Logical: &Logical{
+												Equality: &Equality{
+													Comparison: &Comparison{
 														Unary: &Unary{
 															Primary: &Primary{
 																Number: &val3,
@@ -661,9 +675,9 @@ func TestSelectExpressionChainFunction(t *testing.T) {
 	val5 := "\"kube-probe\""
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Op: "!",
 						Unary: &Unary{
@@ -674,8 +688,12 @@ func TestSelectExpressionChainFunction(t *testing.T) {
 							},
 						},
 					},
-					Op: "or",
-					Next: &Logical{
+				},
+			},
+			Op: "or",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Op: "!",
 							Unary: &Unary{
@@ -685,19 +703,19 @@ func TestSelectExpressionChainFunction(t *testing.T) {
 										SelectExpression: &SelectExpression{
 											Key: &val3,
 											Expression: &Expression{
-												Equality: &Equality{
-													Comparison: &Comparison{
-														Logical: &Logical{
+												Logical: &Logical{
+													Equality: &Equality{
+														Comparison: &Comparison{
 															Unary: &Unary{
 																Primary: &Primary{
 																	CallExpression: &CallExpression{
 																		Identifier: &val4,
 																		Parameters: []*Parameter{
-																			{
+																			&Parameter{
 																				Expression: &Expression{
-																					Equality: &Equality{
-																						Comparison: &Comparison{
-																							Logical: &Logical{
+																					Logical: &Logical{
+																						Equality: &Equality{
+																							Comparison: &Comparison{
 																								Unary: &Unary{
 																									Primary: &Primary{
 																										String: &val5,
@@ -775,26 +793,25 @@ rule(
 	val17 := "\"content-length\""
 	val18 := "\"(\\\\d+(?:\\\\.\\\\d+)?)\""
 	val19 := "\"Latency test\""
-	val20 := "service"
-	val21 := "\"carts.*\""
-	val22 := "response.elapsedTime"
-	val23 := float64(1)
+	val20 := "\"carts.*\""
+	val21 := "response.elapsedTime"
+	val22 := float64(1)
 
 	expect := &Expression{
-		Equality: &Equality{
-			Comparison: &Comparison{
-				Logical: &Logical{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
 					Unary: &Unary{
 						Primary: &Primary{
 							CallExpression: &CallExpression{
 								Identifier: &val1,
 								Parameters: []*Parameter{
-									{
+									&Parameter{
 										Tag: &val2,
 										Expression: &Expression{
-											Equality: &Equality{
-												Comparison: &Comparison{
-													Logical: &Logical{
+											Logical: &Logical{
+												Equality: &Equality{
+													Comparison: &Comparison{
 														Unary: &Unary{
 															Primary: &Primary{
 																String: &val3,
@@ -805,12 +822,12 @@ rule(
 											},
 										},
 									},
-									{
+									&Parameter{
 										Tag: &val4,
 										Expression: &Expression{
-											Equality: &Equality{
-												Comparison: &Comparison{
-													Logical: &Logical{
+											Logical: &Logical{
+												Equality: &Equality{
+													Comparison: &Comparison{
 														Unary: &Unary{
 															Primary: &Primary{
 																CallExpression: &CallExpression{
@@ -818,8 +835,12 @@ rule(
 																},
 															},
 														},
-														Op: "and",
-														Next: &Logical{
+													},
+												},
+												Op: "and",
+												Next: &Logical{
+													Equality: &Equality{
+														Comparison: &Comparison{
 															Unary: &Unary{
 																Primary: &Primary{
 																	CallExpression: &CallExpression{
@@ -828,19 +849,21 @@ rule(
 																},
 															},
 														},
-													},
-												},
-												Op: "==",
-												Next: &Equality{
-													Comparison: &Comparison{
-														Logical: &Logical{
-															Unary: &Unary{
-																Primary: &Primary{
-																	Regex: &val7,
+														Op: "==",
+														Next: &Equality{
+															Comparison: &Comparison{
+																Unary: &Unary{
+																	Primary: &Primary{
+																		Regex: &val7,
+																	},
 																},
 															},
-															Op: "and",
-															Next: &Logical{
+														},
+													},
+													Op: "and",
+													Next: &Logical{
+														Equality: &Equality{
+															Comparison: &Comparison{
 																Unary: &Unary{
 																	Primary: &Primary{
 																		CallExpression: &CallExpression{
@@ -849,19 +872,21 @@ rule(
 																	},
 																},
 															},
-														},
-													},
-													Op: "==",
-													Next: &Equality{
-														Comparison: &Comparison{
-															Logical: &Logical{
-																Unary: &Unary{
-																	Primary: &Primary{
-																		Regex: &val7,
+															Op: "==",
+															Next: &Equality{
+																Comparison: &Comparison{
+																	Unary: &Unary{
+																		Primary: &Primary{
+																			Regex: &val7,
+																		},
 																	},
 																},
-																Op: "and",
-																Next: &Logical{
+															},
+														},
+														Op: "and",
+														Next: &Logical{
+															Equality: &Equality{
+																Comparison: &Comparison{
 																	Unary: &Unary{
 																		Primary: &Primary{
 																			CallExpression: &CallExpression{
@@ -869,19 +894,19 @@ rule(
 																				SelectExpression: &SelectExpression{
 																					Key: &val10,
 																					Expression: &Expression{
-																						Equality: &Equality{
-																							Comparison: &Comparison{
-																								Logical: &Logical{
+																						Logical: &Logical{
+																							Equality: &Equality{
+																								Comparison: &Comparison{
 																									Unary: &Unary{
 																										Primary: &Primary{
 																											CallExpression: &CallExpression{
 																												Identifier: &val11,
 																												Parameters: []*Parameter{
-																													{
+																													&Parameter{
 																														Expression: &Expression{
-																															Equality: &Equality{
-																																Comparison: &Comparison{
-																																	Logical: &Logical{
+																															Logical: &Logical{
+																																Equality: &Equality{
+																																	Comparison: &Comparison{
 																																		Unary: &Unary{
 																																			Primary: &Primary{
 																																				String: &val12,
@@ -912,12 +937,12 @@ rule(
 											},
 										},
 									},
-									{
+									&Parameter{
 										Tag: &val13,
 										Expression: &Expression{
-											Equality: &Equality{
-												Comparison: &Comparison{
-													Logical: &Logical{
+											Logical: &Logical{
+												Equality: &Equality{
+													Comparison: &Comparison{
 														Unary: &Unary{
 															Primary: &Primary{
 																CallExpression: &CallExpression{
@@ -926,11 +951,9 @@ rule(
 															},
 														},
 													},
-												},
-												Op: "==",
-												Next: &Equality{
-													Comparison: &Comparison{
-														Logical: &Logical{
+													Op: "==",
+													Next: &Equality{
+														Comparison: &Comparison{
 															Unary: &Unary{
 																Primary: &Primary{
 																	String: &val15,
@@ -946,19 +969,23 @@ rule(
 							},
 						},
 					},
-					Op: "and",
-					Next: &Logical{
+				},
+			},
+			Op: "and",
+			Next: &Logical{
+				Equality: &Equality{
+					Comparison: &Comparison{
 						Unary: &Unary{
 							Primary: &Primary{
 								CallExpression: &CallExpression{
 									Identifier: &val1,
 									Parameters: []*Parameter{
-										{
+										&Parameter{
 											Tag: &val2,
 											Expression: &Expression{
-												Equality: &Equality{
-													Comparison: &Comparison{
-														Logical: &Logical{
+												Logical: &Logical{
+													Equality: &Equality{
+														Comparison: &Comparison{
 															Unary: &Unary{
 																Primary: &Primary{
 																	String: &val16,
@@ -969,12 +996,12 @@ rule(
 												},
 											},
 										},
-										{
+										&Parameter{
 											Tag: &val4,
 											Expression: &Expression{
-												Equality: &Equality{
-													Comparison: &Comparison{
-														Logical: &Logical{
+												Logical: &Logical{
+													Equality: &Equality{
+														Comparison: &Comparison{
 															Unary: &Unary{
 																Primary: &Primary{
 																	CallExpression: &CallExpression{
@@ -987,12 +1014,12 @@ rule(
 												},
 											},
 										},
-										{
+										&Parameter{
 											Tag: &val13,
 											Expression: &Expression{
-												Equality: &Equality{
-													Comparison: &Comparison{
-														Logical: &Logical{
+												Logical: &Logical{
+													Equality: &Equality{
+														Comparison: &Comparison{
 															Unary: &Unary{
 																Primary: &Primary{
 																	CallExpression: &CallExpression{
@@ -1004,11 +1031,9 @@ rule(
 																},
 															},
 														},
-													},
-													Op: "==",
-													Next: &Equality{
-														Comparison: &Comparison{
-															Logical: &Logical{
+														Op: "==",
+														Next: &Equality{
+															Comparison: &Comparison{
 																Unary: &Unary{
 																	Primary: &Primary{
 																		Regex: &val18,
@@ -1024,19 +1049,23 @@ rule(
 								},
 							},
 						},
-						Op: "and",
-						Next: &Logical{
+					},
+				},
+				Op: "and",
+				Next: &Logical{
+					Equality: &Equality{
+						Comparison: &Comparison{
 							Unary: &Unary{
 								Primary: &Primary{
 									CallExpression: &CallExpression{
 										Identifier: &val1,
 										Parameters: []*Parameter{
-											{
+											&Parameter{
 												Tag: &val2,
 												Expression: &Expression{
-													Equality: &Equality{
-														Comparison: &Comparison{
-															Logical: &Logical{
+													Logical: &Logical{
+														Equality: &Equality{
+															Comparison: &Comparison{
 																Unary: &Unary{
 																	Primary: &Primary{
 																		String: &val19,
@@ -1047,12 +1076,12 @@ rule(
 													},
 												},
 											},
-											{
+											&Parameter{
 												Tag: &val4,
 												Expression: &Expression{
-													Equality: &Equality{
-														Comparison: &Comparison{
-															Logical: &Logical{
+													Logical: &Logical{
+														Equality: &Equality{
+															Comparison: &Comparison{
 																Unary: &Unary{
 																	Primary: &Primary{
 																		CallExpression: &CallExpression{
@@ -1060,25 +1089,27 @@ rule(
 																		},
 																	},
 																},
-																Op: "and",
-																Next: &Logical{
+															},
+														},
+														Op: "and",
+														Next: &Logical{
+															Equality: &Equality{
+																Comparison: &Comparison{
 																	Unary: &Unary{
 																		Primary: &Primary{
 																			CallExpression: &CallExpression{
-																				Identifier: &val20,
+																				Identifier: &val6,
 																			},
 																		},
 																	},
 																},
-															},
-														},
-														Op: "==",
-														Next: &Equality{
-															Comparison: &Comparison{
-																Logical: &Logical{
-																	Unary: &Unary{
-																		Primary: &Primary{
-																			Regex: &val21,
+																Op: "==",
+																Next: &Equality{
+																	Comparison: &Comparison{
+																		Unary: &Unary{
+																			Primary: &Primary{
+																				Regex: &val20,
+																			},
 																		},
 																	},
 																},
@@ -1087,26 +1118,24 @@ rule(
 													},
 												},
 											},
-											{
+											&Parameter{
 												Tag: &val13,
 												Expression: &Expression{
-													Equality: &Equality{
-														Comparison: &Comparison{
-															Logical: &Logical{
+													Logical: &Logical{
+														Equality: &Equality{
+															Comparison: &Comparison{
 																Unary: &Unary{
 																	Primary: &Primary{
 																		CallExpression: &CallExpression{
-																			Identifier: &val22,
+																			Identifier: &val21,
 																		},
 																	},
 																},
-															},
-															Op: ">=",
-															Next: &Comparison{
-																Logical: &Logical{
+																Op: ">=",
+																Next: &Comparison{
 																	Unary: &Unary{
 																		Primary: &Primary{
-																			Number: &val23,
+																			Number: &val22,
 																		},
 																	},
 																},

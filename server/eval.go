@@ -250,29 +250,8 @@ func evalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
 	return
 }
 
-func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
-	unar, err := evalUnary(logic.Unary, obj)
-	if err != nil {
-		return
-	}
-
-	var next interface{}
-	if logic.Next != nil {
-		next, err = evalLogical(logic.Next, obj)
-		if err != nil {
-			return
-		}
-		v = logicalOperations[logic.Op].(func(interface{}, interface{}) bool)(unar, next)
-		return
-	} else {
-		v = unar
-	}
-
-	return
-}
-
 func evalComparison(comp *Comparison, obj interface{}) (v interface{}, err error) {
-	logic, err := evalLogical(comp.Logical, obj)
+	logic, err := evalUnary(comp.Unary, obj)
 	if err != nil {
 		return
 	}
@@ -313,12 +292,33 @@ func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
 	return
 }
 
+func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
+	unar, err := evalEquality(logic.Equality, obj)
+	if err != nil {
+		return
+	}
+
+	var next interface{}
+	if logic.Next != nil {
+		next, err = evalLogical(logic.Next, obj)
+		if err != nil {
+			return
+		}
+		v = logicalOperations[logic.Op].(func(interface{}, interface{}) bool)(unar, next)
+		return
+	} else {
+		v = unar
+	}
+
+	return
+}
+
 func evalExpression(expr *Expression, obj interface{}) (v interface{}, err error) {
-	if expr.Equality == nil {
+	if expr.Logical == nil {
 		v = true
 		return
 	}
-	v, err = evalEquality(expr.Equality, obj)
+	v, err = evalLogical(expr.Logical, obj)
 	return
 }
 

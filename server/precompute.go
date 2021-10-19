@@ -63,21 +63,9 @@ func computeUnary(unar *Unary, prependPath string) (path string, err error) {
 	return
 }
 
-func computeLogical(logic *Logical, prependPath string) (path string, err error) {
-	var _path string
-	path, err = computeUnary(logic.Unary, prependPath)
-	if logic.Next != nil {
-		_path, err = computeLogical(logic.Next, prependPath)
-		if path == "" {
-			path = _path
-		}
-	}
-	return
-}
-
 func computeComparison(comp *Comparison, prependPath string) (path string, err error) {
 	var _path string
-	path, err = computeLogical(comp.Logical, prependPath)
+	path, err = computeUnary(comp.Unary, prependPath)
 	if comp.Next != nil {
 		_path, err = computeComparison(comp.Next, prependPath)
 		if path == "" {
@@ -99,11 +87,23 @@ func computeEquality(equ *Equality, prependPath string) (path string, err error)
 	return
 }
 
+func computeLogical(logic *Logical, prependPath string) (path string, err error) {
+	var _path string
+	path, err = computeEquality(logic.Equality, prependPath)
+	if logic.Next != nil {
+		_path, err = computeLogical(logic.Next, prependPath)
+		if path == "" {
+			path = _path
+		}
+	}
+	return
+}
+
 func computeExpression(expr *Expression, prependPath string) (path string, err error) {
-	if expr.Equality == nil {
+	if expr.Logical == nil {
 		return
 	}
-	path, err = computeEquality(expr.Equality, prependPath)
+	path, err = computeLogical(expr.Logical, prependPath)
 	return
 }
 

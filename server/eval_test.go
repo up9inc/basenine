@@ -72,6 +72,7 @@ var data = []struct {
 	{`brand["name"].startsWith("hev")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false},
 	{`timestamp > datetime("10/19/2021 6:29:02 PM")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"timestamp":1634668524}`, true},
 	{`timestamp > datetime("10/19/2021 7:29:02 PM")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"timestamp":1634668524}`, false},
+	{`request.headers["a"] == "b" and request.path[1] == "v1"`, `{"request":{"path":["api","v1","example"],"headers":{"a":"b","c":"d"}}}`, true},
 }
 
 func TestEval(t *testing.T) {
