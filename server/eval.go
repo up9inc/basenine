@@ -132,6 +132,24 @@ var comparisonOperations = map[string]interface{}{
 	"<=": leq,
 }
 
+func evalSelectExpression(sel *SelectExpression, obj interface{}) (v interface{}, err error) {
+	if sel.Expression != nil {
+		v, err = evalExpression(sel.Expression, obj)
+	} else {
+		v = false
+	}
+	return
+}
+
+func evalCallExpression(call *CallExpression, obj interface{}) (v interface{}, err error) {
+	if call.SelectExpression != nil {
+		v, err = evalSelectExpression(call.SelectExpression, obj)
+	} else {
+		v = false
+	}
+	return
+}
+
 func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 	if pri.Bool != nil {
 		v = *pri.Bool
@@ -150,6 +168,8 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 		v = pri.Regexp
 	} else if pri.SubExpression != nil {
 		v, err = evalExpression(pri.SubExpression, obj)
+	} else if pri.CallExpression != nil {
+		v, err = evalCallExpression(pri.CallExpression, obj)
 	} else {
 		v = false
 	}
@@ -242,13 +262,12 @@ func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
 	return
 }
 
-func evalExpression(expr *Expression, obj interface{}) (truth bool, err error) {
+func evalExpression(expr *Expression, obj interface{}) (v interface{}, err error) {
 	if expr.Equality == nil {
-		truth = true
+		v = true
 		return
 	}
-	v, err := evalEquality(expr.Equality, obj)
-	truth = v.(bool)
+	v, err = evalEquality(expr.Equality, obj)
 	return
 }
 
@@ -258,6 +277,7 @@ func Eval(expr *Expression, json string) (truth bool, err error) {
 		return
 	}
 
-	truth, err = evalExpression(expr, obj)
+	v, err := evalExpression(expr, obj)
+	truth = v.(bool)
 	return
 }

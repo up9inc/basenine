@@ -8,8 +8,7 @@ import (
 	jp "github.com/ohler55/ojg/jp"
 )
 
-func computeCallExpression(call *CallExpression) (jsonPath *jp.Expr, path string, err error) {
-	var _path string
+func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, path string, err error) {
 	if call.Parameters == nil {
 		if call.Identifier != nil {
 			path = *call.Identifier
@@ -19,73 +18,89 @@ func computeCallExpression(call *CallExpression) (jsonPath *jp.Expr, path string
 				path = fmt.Sprintf("%s[%d]", path, *call.SelectExpression.Index)
 			} else if call.SelectExpression.Key != nil {
 				path = fmt.Sprintf("%s[\"%s\"]", path, strings.Trim(*call.SelectExpression.Key, "\""))
-			} else if call.SelectExpression.Expression != nil {
-				_path, err = computeExpression(call.SelectExpression.Expression, true)
-				path = fmt.Sprintf("%s.%s", path, _path)
+			}
+
+			if call.SelectExpression.Expression != nil {
+				_, err = computeExpression(call.SelectExpression.Expression, path)
+				return
 			}
 		}
 	}
+	path = fmt.Sprintf("%s.%s", prependPath, path)
 	_jsonPath, err := jp.ParseString(path)
 	jsonPath = &_jsonPath
-	if err != nil {
-		return
-	}
 	return
 }
 
-func computePrimary(pri *Primary, returnPath bool) (path string, err error) {
+func computePrimary(pri *Primary, prependPath string) (path string, err error) {
 	if pri.SubExpression != nil {
-		path, err = computeExpression(pri.SubExpression, returnPath)
+		path, err = computeExpression(pri.SubExpression, prependPath)
 	} else if pri.CallExpression != nil {
-		pri.JsonPath, path, err = computeCallExpression(pri.CallExpression)
+		pri.JsonPath, path, err = computeCallExpression(pri.CallExpression, prependPath)
 	} else if pri.Regex != nil {
 		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}
 	return
 }
 
-func computeUnary(unar *Unary, returnPath bool) (path string, err error) {
+func computeUnary(unar *Unary, prependPath string) (path string, err error) {
+	var _path string
 	if unar.Unary != nil {
-		path, err = computeUnary(unar.Unary, returnPath)
+		path, err = computeUnary(unar.Unary, prependPath)
 	} else {
-		path, err = computePrimary(unar.Primary, returnPath)
+		_path, err = computePrimary(unar.Primary, prependPath)
+		if path == "" {
+			path = _path
+		}
 	}
 	return
 }
 
-func computeLogical(logic *Logical, returnPath bool) (path string, err error) {
-	path, err = computeUnary(logic.Unary, returnPath)
+func computeLogical(logic *Logical, prependPath string) (path string, err error) {
+	var _path string
+	path, err = computeUnary(logic.Unary, prependPath)
 	if logic.Next != nil {
-		path, err = computeLogical(logic.Next, returnPath)
+		_path, err = computeLogical(logic.Next, prependPath)
+		if path == "" {
+			path = _path
+		}
 	}
 	return
 }
 
-func computeComparison(comp *Comparison, returnPath bool) (path string, err error) {
-	path, err = computeLogical(comp.Logical, returnPath)
+func computeComparison(comp *Comparison, prependPath string) (path string, err error) {
+	var _path string
+	path, err = computeLogical(comp.Logical, prependPath)
 	if comp.Next != nil {
-		path, err = computeComparison(comp.Next, returnPath)
+		_path, err = computeComparison(comp.Next, prependPath)
+		if path == "" {
+			path = _path
+		}
 	}
 	return
 }
 
-func computeEquality(equ *Equality, returnPath bool) (path string, err error) {
-	path, err = computeComparison(equ.Comparison, returnPath)
+func computeEquality(equ *Equality, prependPath string) (path string, err error) {
+	var _path string
+	path, err = computeComparison(equ.Comparison, prependPath)
 	if equ.Next != nil {
-		path, err = computeEquality(equ.Next, returnPath)
+		_path, err = computeEquality(equ.Next, prependPath)
+		if path == "" {
+			path = _path
+		}
 	}
 	return
 }
 
-func computeExpression(expr *Expression, returnPath bool) (path string, err error) {
+func computeExpression(expr *Expression, prependPath string) (path string, err error) {
 	if expr.Equality == nil {
 		return
 	}
-	path, err = computeEquality(expr.Equality, returnPath)
+	path, err = computeEquality(expr.Equality, prependPath)
 	return
 }
 
 func ComputeJsonPaths(expr *Expression) (err error) {
-	_, err = computeExpression(expr, false)
+	_, err = computeExpression(expr, "")
 	return
 }
