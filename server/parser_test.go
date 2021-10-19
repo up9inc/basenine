@@ -299,7 +299,7 @@ func TestSubExpression(t *testing.T) {
 
 func TestRegexLiteral(t *testing.T) {
 	text := `
-http.request == r"hello"
+request == r"hello.*"
 	`
 	expr, err := Parse(text)
 	if err != nil {
@@ -307,8 +307,8 @@ http.request == r"hello"
 	}
 	// repr.Println(expr)
 
-	val1 := "http.request"
-	val2 := "\"hello\""
+	val1 := "request"
+	val2 := "\"hello.*\""
 
 	expect := &Expression{
 		Equality: &Equality{
@@ -482,7 +482,7 @@ http and request.method == "GET" and request.path == "/example" and (request.que
 
 func TestSelectExpressionIndex(t *testing.T) {
 	text := `
-http.request.path[1] == "hello"
+request.path[1] == "hello"
 	`
 	expr, err := Parse(text)
 	if err != nil {
@@ -490,7 +490,7 @@ http.request.path[1] == "hello"
 	}
 	// repr.Println(expr)
 
-	val1 := "http.request.path"
+	val1 := "request.path"
 	val2 := 1
 	val3 := "\"hello\""
 
@@ -530,7 +530,7 @@ http.request.path[1] == "hello"
 
 func TestSelectExpressionKey(t *testing.T) {
 	text := `
-!http.request.headers["user-agent"] == "kube-probe"
+!request.headers["user-agent"] == "kube-probe"
 	`
 	expr, err := Parse(text)
 	if err != nil {
@@ -538,7 +538,7 @@ func TestSelectExpressionKey(t *testing.T) {
 	}
 	// repr.Println(expr)
 
-	val1 := "http.request.headers"
+	val1 := "request.headers"
 	val2 := "\"user-agent\""
 	val3 := "\"kube-probe\""
 
@@ -646,7 +646,7 @@ a.b(3, 5)
 
 func TestSelectExpressionChainFunction(t *testing.T) {
 	text := `
-!http or !http.request.headers["user-agent"].startsWith("kube-probe")
+!http or !request.headers["user-agent"].startsWith("kube-probe")
 	`
 	expr, err := Parse(text)
 	if err != nil {
@@ -655,7 +655,7 @@ func TestSelectExpressionChainFunction(t *testing.T) {
 	// repr.Println(expr)
 
 	val1 := "http"
-	val2 := "http.request.headers"
+	val2 := "request.headers"
 	val3 := "\"user-agent\""
 	val4 := "startsWith"
 	val5 := "\"kube-probe\""
@@ -1139,8 +1139,8 @@ func TestSyntaxErrorLiteralNotTerminated(t *testing.T) {
 
 func TestSyntaxErrorUnexpectedToken(t *testing.T) {
 	text := `
-http.request.path[3.14] == "hello"
+request.path[3.14] == "hello"
 	`
 	_, err := Parse(text)
-	assert.EqualError(t, err, "2:19: unexpected token \"3.14\" (expected (<string> | <char> | <rawstring>) \"]\")")
+	assert.EqualError(t, err, "2:14: unexpected token \"3.14\" (expected (<string> | <char> | <rawstring>) \"]\")")
 }

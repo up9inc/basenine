@@ -1,6 +1,8 @@
 package main
 
 import (
+	"regexp"
+
 	"github.com/alecthomas/participle/v2"
 	jp "github.com/ohler55/ojg/jp"
 )
@@ -42,6 +44,7 @@ type Primary struct {
 	CallExpression *CallExpression `| @@`
 	SubExpression  *Expression     `| "(" @@ ")" `
 	JsonPath       *jp.Expr
+	Regexp         *regexp.Regexp
 }
 
 type CallExpression struct {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -76,11 +77,31 @@ var logicalOperations = map[string]interface{}{
 }
 
 func eql(operand1 interface{}, operand2 interface{}) bool {
-	return stringOperand(operand1) == stringOperand(operand2)
+	switch operand1.(type) {
+	case *regexp.Regexp:
+		return operand1.(*regexp.Regexp).MatchString(stringOperand(operand2))
+	default:
+		switch operand2.(type) {
+		case *regexp.Regexp:
+			return operand2.(*regexp.Regexp).MatchString(stringOperand(operand1))
+		default:
+			return stringOperand(operand1) == stringOperand(operand2)
+		}
+	}
 }
 
 func neq(operand1 interface{}, operand2 interface{}) bool {
-	return stringOperand(operand1) != stringOperand(operand2)
+	switch operand1.(type) {
+	case *regexp.Regexp:
+		return !operand1.(*regexp.Regexp).MatchString(stringOperand(operand2))
+	default:
+		switch operand2.(type) {
+		case *regexp.Regexp:
+			return !operand2.(*regexp.Regexp).MatchString(stringOperand(operand1))
+		default:
+			return stringOperand(operand1) != stringOperand(operand2)
+		}
+	}
 }
 
 var equalityOperations = map[string]interface{}{
@@ -125,6 +146,8 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 		} else {
 			v = result[0]
 		}
+	} else if pri.Regexp != nil {
+		v = pri.Regexp
 	} else if pri.SubExpression != nil {
 		v, err = evalExpression(pri.SubExpression, obj)
 	} else {

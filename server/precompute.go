@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	jp "github.com/ohler55/ojg/jp"
 )
@@ -36,6 +38,8 @@ func computePrimary(pri *Primary, returnPath bool) (path string, err error) {
 		path, err = computeExpression(pri.SubExpression, returnPath)
 	} else if pri.CallExpression != nil {
 		pri.JsonPath, path, err = computeCallExpression(pri.CallExpression)
+	} else if pri.Regex != nil {
+		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}
 	return
 }
