@@ -107,7 +107,7 @@ func computeExpression(expr *Expression, prependPath string) (path string, err e
 	return
 }
 
-func ComputeJsonPaths(expr *Expression) (err error) {
+func Precompute(expr *Expression) (err error) {
 	_, err = computeExpression(expr, "")
 	return
 }

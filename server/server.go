@@ -244,7 +244,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	query := string(data)
 	expr, err := Parse(query)
 	check(err)
-	err = ComputeJsonPaths(expr)
+	err = Precompute(expr)
 	check(err)
 
 	var n int64 = 0

@@ -82,7 +82,7 @@ func TestEval(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 		// repr.Println(expr)
-		err = ComputeJsonPaths(expr)
+		err = Precompute(expr)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
