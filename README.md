@@ -28,16 +28,19 @@ const (
 	INSERT
 	QUERY
 	SINGLE
+    VALIDATE
 )
 ```
 
 **Insert mode** provies a long lasting TCP connection to insert data into the `data.bin` binary file on server's directory.
 A client can elevate itself to insert mode by sending `/insert` command. `data.bin` file is removed upon closing an insert mode connection.
 
-**Query mode** let's you filter the records in the `data.bin` file based on a primitive syntax like `brand.name == \"Chevrolet\"` which supports two operators: `==` and `!=`.
+**Query mode** let's you filter the records in the `data.bin` file based on a filtering syntax like `brand.name == \"Chevrolet\"`
 Query mode streams the results to the client and is able to keep up where it left off even if the database have millions of records. The TCP connection in this mode is long lasting too. The filter cannot be changed without establishing a new connnection.
 
 **Single mode** is a short lasting TCP connection that returns a single record from `data.bin` based on the provided index value.
+
+**Validate mode** checks the query against syntax errors. Returns the error if it's syntactically invalid otherwise returns `OK`.
 
 ## Client
 
@@ -197,6 +200,20 @@ Connecting to localhost:8000...
 ** {"id":100,"name":"Harvard","league":{"name":"Ivy"},"address":"Massachusetts","enrollment":5000,"score":4.8,"year":1636}
 >
 ```
+
+### Validate
+
+Run the client:
+
+`go run client/validate.go -host localhost -port 8000 -query "brand.name == \"Chevrolet\""`
+
+It should return `OK`.
+
+Run the client:
+
+`go run client/validate.go -host localhost -port 8000 -query "=.="`
+
+It should return `1:1: unexpected token "="`.
 
 ## TODOS
 

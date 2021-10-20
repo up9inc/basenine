@@ -27,14 +27,16 @@ const (
 	INSERT
 	QUERY
 	SINGLE
+	VALIDATE
 )
 
 type Commands int
 
 const (
-	CMD_INSERT string = "/insert"
-	CMD_QUERY  string = "/query"
-	CMD_SINGLE string = "/single"
+	CMD_INSERT   string = "/insert"
+	CMD_QUERY    string = "/query"
+	CMD_SINGLE   string = "/single"
+	CMD_VALIDATE string = "/validate"
 )
 
 const DB_FILE string = "data.bin"
@@ -136,6 +138,8 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 			streamRecords(conn, data)
 		case SINGLE:
 			retrieveSingle(conn, data)
+		case VALIDATE:
+			validateQuery(conn, data)
 		}
 	}
 
@@ -166,6 +170,9 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 
 		case message == CMD_SINGLE:
 			mode = SINGLE
+
+		case strings.HasPrefix(message, CMD_VALIDATE):
+			mode = VALIDATE
 
 		default:
 			conn.Write([]byte("Unrecognized command.\n"))
@@ -294,4 +301,15 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	b, n, err = readRecord(f, n)
 	conn.Write([]byte(fmt.Sprintf("%s\n", b)))
 	return
+}
+
+func validateQuery(conn net.Conn, data []byte) {
+	query := string(data)
+	_, err := Parse(query)
+
+	if err == nil {
+		conn.Write([]byte(fmt.Sprintf("OK\n")))
+	} else {
+		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
+	}
 }
