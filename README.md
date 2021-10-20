@@ -29,6 +29,7 @@ const (
 	QUERY
 	SINGLE
     VALIDATE
+    MACRO
 )
 ```
 
@@ -41,6 +42,8 @@ Query mode streams the results to the client and is able to keep up where it lef
 **Single mode** is a short lasting TCP connection that returns a single record from `data.bin` based on the provided index value.
 
 **Validate mode** checks the query against syntax errors. Returns the error if it's syntactically invalid otherwise returns `OK`.
+
+**Macro mode** let's you define a macro for the query language like `http~proto.name == "http"`.
 
 ## Client
 
@@ -214,6 +217,12 @@ Run the client:
 `go run client/validate.go -host localhost -port 8000 -query "=.="`
 
 It should return `1:1: unexpected token "="`.
+
+### Macro
+
+Run the client:
+
+`go run client/macro.go -host localhost -port 8000 -macro "chevy~brand.name == \"Chevrolet\""`
 
 ## TODOS
 

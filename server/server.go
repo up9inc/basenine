@@ -28,6 +28,7 @@ const (
 	QUERY
 	SINGLE
 	VALIDATE
+	MACRO
 )
 
 type Commands int
@@ -37,6 +38,7 @@ const (
 	CMD_QUERY    string = "/query"
 	CMD_SINGLE   string = "/single"
 	CMD_VALIDATE string = "/validate"
+	CMD_MACRO    string = "/macro"
 )
 
 const DB_FILE string = "data.bin"
@@ -140,6 +142,8 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 			retrieveSingle(conn, data)
 		case VALIDATE:
 			validateQuery(conn, data)
+		case MACRO:
+			applyMacro(conn, data)
 		}
 	}
 
@@ -173,6 +177,9 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 
 		case strings.HasPrefix(message, CMD_VALIDATE):
 			mode = VALIDATE
+
+		case strings.HasPrefix(message, CMD_MACRO):
+			mode = MACRO
 
 		default:
 			conn.Write([]byte("Unrecognized command.\n"))
@@ -242,6 +249,8 @@ func readRecord(f *os.File, seek int64) (b []byte, n int64, err error) {
 
 func streamRecords(conn net.Conn, data []byte) (err error) {
 	query := string(data)
+	query, err = expandMacros(query)
+	check(err)
 	expr, err := Parse(query)
 	check(err)
 	err = Precompute(expr)
@@ -312,4 +321,21 @@ func validateQuery(conn net.Conn, data []byte) {
 	} else {
 		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
 	}
+}
+
+func applyMacro(conn net.Conn, data []byte) {
+	str := string(data)
+
+	s := strings.Split(str, "~")
+
+	if len(s) != 2 {
+		conn.Write([]byte("Error: Provide only two expressions!\n"))
+	}
+
+	macro := strings.TrimSpace(s[0])
+	expanded := strings.TrimSpace(s[1])
+
+	addMacro(macro, expanded)
+
+	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
