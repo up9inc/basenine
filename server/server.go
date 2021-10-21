@@ -112,13 +112,7 @@ type ConcurrentSlice struct {
 	partitionIndex int64
 }
 
-// Main method that the program enters into
-func main() {
-	// Parse the command-line arguments.
-	flag.Parse()
-
-	log.Println("Starting server...")
-
+func init() {
 	// Clean up the database files.
 	removeDatabaseFiles()
 
@@ -126,6 +120,17 @@ func main() {
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 	}
+
+	go periodicFileSyncer()
+	go periodicPartitioner()
+}
+
+// Main method that the program enters into
+func main() {
+	// Parse the command-line arguments.
+	flag.Parse()
+
+	log.Println("Starting server...")
 
 	// Start listenning to given address and port.
 	src := *addr + ":" + strconv.Itoa(*port)
@@ -145,9 +150,6 @@ func main() {
 		removeDatabaseFiles()
 		os.Exit(1)
 	}()
-
-	go periodicFileSyncer()
-	go periodicPartitioner()
 
 	// Start accepting TCP connections.
 	for {
@@ -179,8 +181,7 @@ func removeDatabaseFiles() {
 	files, err := filepath.Glob("./data_*.bin")
 	check(err)
 	for _, f := range files {
-		err = os.Remove(f)
-		check(err)
+		os.Remove(f)
 	}
 }
 
@@ -443,27 +444,30 @@ func readRecord(f *os.File, seek int64) (b []byte, n int64, err error) {
 // POSIX compliant method for checking whether connection was closed by the peer or not
 func connCheck(conn net.Conn) error {
 	var sysErr error = nil
-	rc, err := conn.(syscall.Conn).SyscallConn()
-	if err != nil {
-		return err
-	}
-	err = rc.Read(func(fd uintptr) bool {
-		var buf []byte = []byte{0}
-		n, _, err := syscall.Recvfrom(int(fd), buf, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
-		switch {
-		case n == 0 && err == nil:
-			sysErr = io.EOF
-		case err == syscall.EAGAIN || err == syscall.EWOULDBLOCK:
-			sysErr = nil
-		default:
-			sysErr = err
+	// Not easily testable through unit tests. net.Pipe() cannot be used.
+	switch conn.(type) {
+	case syscall.Conn:
+		rc, err := conn.(syscall.Conn).SyscallConn()
+		if err != nil {
+			return err
 		}
-		return true
-	})
-	if err != nil {
-		return err
+		err = rc.Read(func(fd uintptr) bool {
+			var buf []byte = []byte{0}
+			n, _, err := syscall.Recvfrom(int(fd), buf, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
+			switch {
+			case n == 0 && err == nil:
+				sysErr = io.EOF
+			case err == syscall.EAGAIN || err == syscall.EWOULDBLOCK:
+				sysErr = nil
+			default:
+				sysErr = err
+			}
+			return true
+		})
+		if err != nil {
+			return err
+		}
 	}
-
 	return sysErr
 }
 
@@ -564,7 +568,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			if truth {
 				_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
 				if err != nil {
-					fmt.Printf("err: %v\n", err)
+					log.Printf("Write error: %v\n", err)
 				}
 			}
 		}
