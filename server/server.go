@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,7 +42,10 @@ const (
 	CMD_MACRO    string = "/macro"
 )
 
-const DB_FILE string = "data.bin"
+const DB_FILE string = "data"
+const DB_FILE_EXT string = "bin"
+
+var dbSizeLimit int64 = 2000000 / 2
 
 var connections []net.Conn
 
@@ -49,23 +53,21 @@ var cs ConcurrentSlice
 
 type ConcurrentSlice struct {
 	sync.RWMutex
-	lastOffset int64
-	offsets    []int64
-}
-
-func (cs *ConcurrentSlice) Append(offset int64) {
-	cs.Lock()
-	defer cs.Unlock()
-
-	cs.offsets = append(cs.offsets, offset)
+	lastOffset     int64
+	partitionRefs  []int64
+	offsets        []int64
+	partitions     []*os.File
+	partitionIndex int64
 }
 
 func main() {
 	flag.Parse()
 
 	fmt.Println("Starting server...")
-	os.Remove(DB_FILE)
-	cs = ConcurrentSlice{}
+	removeDatabaseFiles()
+	cs = ConcurrentSlice{
+		partitionIndex: -1,
+	}
 
 	src := *addr + ":" + strconv.Itoa(*port)
 	listener, _ := net.Listen("tcp", src)
@@ -79,7 +81,7 @@ func main() {
 	go func() {
 		<-c
 		quitConnections()
-		os.Remove(DB_FILE)
+		removeDatabaseFiles()
 		os.Exit(1)
 	}()
 
@@ -93,9 +95,61 @@ func main() {
 	}
 }
 
+func newPartition() *os.File {
+	cs.Lock()
+	cs.partitionIndex += 1
+	f, err := os.OpenFile(fmt.Sprintf("%s_%06d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	check(err)
+	cs.partitions = append(cs.partitions, f)
+	cs.lastOffset = 0
+	cs.Unlock()
+	return f
+}
+
+func removeDatabaseFiles() {
+	files, err := filepath.Glob("./data_*.bin")
+	check(err)
+	for _, f := range files {
+		err = os.Remove(f)
+		check(err)
+	}
+}
+
+func periodicPartitioner(f *os.File) {
+	for {
+		time.Sleep(1 * time.Second)
+		if dbSizeLimit == 0 {
+			continue
+		}
+		info, err := f.Stat()
+		check(err)
+		currentSize := info.Size()
+		if currentSize > dbSizeLimit {
+			f = newPartition()
+			cs.Lock()
+			if cs.partitionIndex > 1 {
+				discarded := cs.partitions[cs.partitionIndex-2]
+				discarded.Close()
+				os.Remove(discarded.Name())
+			}
+			cs.Unlock()
+			check(err)
+		}
+	}
+}
+
 func periodicFileSyncer(f *os.File) {
+	var lastPartitionIndex int64
 	for {
 		time.Sleep(10 * time.Millisecond)
+		if cs.partitionIndex > lastPartitionIndex {
+			var err error
+			cs.Lock()
+			lastPartitionIndex = cs.partitionIndex
+			f, err = os.OpenFile(cs.partitions[cs.partitionIndex].Name(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			cs.Unlock()
+			check(err)
+		}
 		f.Sync()
 	}
 }
@@ -112,10 +166,19 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 	var mode ConnectionMode = NONE
 	var f *os.File
 	var err error
+	var lastPartitionIndex int64
 
 	defer f.Close()
 
 	for {
+		if cs.partitionIndex > lastPartitionIndex {
+			cs.Lock()
+			lastPartitionIndex = cs.partitionIndex
+			f, err = os.OpenFile(cs.partitions[cs.partitionIndex].Name(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			cs.Unlock()
+			check(err)
+		}
+
 		ok := scanner.Scan()
 
 		if !ok {
@@ -130,9 +193,15 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 		case NONE:
 			mode = _mode
 			if mode == INSERT {
-				f, err = os.OpenFile(DB_FILE, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				cs.Lock()
+				cs.partitionIndex += 1
+				lastPartitionIndex = cs.partitionIndex
+				f, err = os.OpenFile(fmt.Sprintf("%s_%06d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				check(err)
+				cs.partitions = append(cs.partitions, f)
+				cs.Unlock()
 				go periodicFileSyncer(f)
+				go periodicPartitioner(f)
 			}
 		case INSERT:
 			insertData(f, data)
@@ -150,7 +219,7 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 	fmt.Println("Client at " + remoteAddr + " disconnected.")
 
 	if mode == INSERT {
-		os.Remove(DB_FILE)
+		removeDatabaseFiles()
 	}
 }
 
@@ -221,6 +290,7 @@ func insertData(f *os.File, data []byte) {
 	fmt.Printf("wrote %d bytes\n", n)
 
 	cs.offsets = append(cs.offsets, cs.lastOffset)
+	cs.partitionRefs = append(cs.partitionRefs, cs.partitionIndex)
 	cs.lastOffset = cs.lastOffset + 8 + length
 	cs.Unlock()
 }
@@ -257,11 +327,36 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	check(err)
 
 	var n int64 = 0
-	var i int = 0
+	var dbStartIndex int64 = -1
 
 	for {
 		time.Sleep(10 * time.Millisecond)
-		f, err := os.Open(DB_FILE)
+
+		cs.Lock()
+		partitionIndex := cs.partitionIndex
+		cs.Unlock()
+
+		if partitionIndex == -1 {
+			continue
+		}
+
+		if dbStartIndex > partitionIndex {
+			dbStartIndex = partitionIndex
+		} else {
+			n = 0
+		}
+
+		if dbStartIndex == -1 {
+			dbStartIndex = partitionIndex
+			if partitionIndex > 1 {
+				dbStartIndex -= 1
+			}
+		}
+
+		cs.Lock()
+		f, err := os.Open(cs.partitions[dbStartIndex].Name())
+		cs.Unlock()
+
 		if err != nil {
 			continue
 		}
@@ -283,7 +378,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		}
 
 		f.Close()
-		i++
+		dbStartIndex++
 	}
 }
 
@@ -301,10 +396,14 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 
 	cs.RLock()
 	n := cs.offsets[index]
+	i := cs.partitionRefs[index]
 	cs.RUnlock()
 
-	f, err := os.Open(DB_FILE)
-	check(err)
+	f, err := os.Open(cs.partitions[i].Name())
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("Record does not exist!\n")))
+		return
+	}
 	f.Seek(n, 0)
 	var b []byte
 	b, n, err = readRecord(f, n)
