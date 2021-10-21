@@ -22,3 +22,6 @@
 
 # Build Directory
 build/
+
+# Ignore the scripts that are created for development
+*dev.*
