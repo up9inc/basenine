@@ -17,8 +17,8 @@
 # Editors and IDEs
 .vscode/
 
-# Database File
-data.bin
+# Database Files
+*.bin
 
 # Build Directory
 build/
