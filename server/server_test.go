@@ -147,8 +147,6 @@ func TestServerProtocolQueryMode(t *testing.T) {
 				ok := scanner.Scan()
 				text := scanner.Text()
 
-				// fmt.Printf("\b\b** %s\n> ", text)
-
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 				index++
 				assert.Equal(t, expected, string(text))
@@ -172,12 +170,127 @@ func TestServerProtocolQueryMode(t *testing.T) {
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", query)))
 
-	if waitTimeout(&wg, 3*time.Second) {
+	if waitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	} else {
 		client.Close()
 		server.Close()
 
 		removeDatabaseFiles()
+	}
+}
+
+func TestServerProtocolSingleMode(t *testing.T) {
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+	id := 42
+
+	cs = ConcurrentSlice{
+		partitionIndex: -1,
+	}
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	f := newPartition()
+	assert.NotNil(t, f)
+
+	for index := 0; index < 100; index++ {
+		insertData(f, []byte(payload))
+	}
+
+	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+		defer wg.Done()
+		for {
+			scanner := bufio.NewScanner(conn)
+
+			for {
+				ok := scanner.Scan()
+				text := scanner.Text()
+
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
+				assert.Equal(t, expected, string(text))
+
+				assert.True(t, ok)
+				return
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, client)
+	wg.Add(1)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/single\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", id)))
+
+	if waitTimeout(&wg, 1*time.Second) {
+		t.Fatal("Timed out waiting for wait group")
+	} else {
+		client.Close()
+		server.Close()
+
+		removeDatabaseFiles()
+	}
+}
+
+var validateModeData = []struct {
+	query    string
+	response string
+}{
+	{`brand.name == "Chevrolet"`, `OK`},
+	{`=.=`, `1:1: unexpected token "="`},
+	{`request.path[3.14] == "hello"`, `1:14: unexpected token "3.14" (expected (<string> | <char> | <rawstring>) "]")`},
+}
+
+func TestServerProtocolValidateMode(t *testing.T) {
+	for _, row := range validateModeData {
+		cs = ConcurrentSlice{
+			partitionIndex: -1,
+		}
+
+		server, client := net.Pipe()
+		go handleConnection(server)
+
+		f := newPartition()
+		assert.NotNil(t, f)
+
+		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+			defer wg.Done()
+			for {
+				scanner := bufio.NewScanner(conn)
+
+				for {
+					ok := scanner.Scan()
+					text := scanner.Text()
+
+					assert.Equal(t, row.response, string(text))
+
+					assert.True(t, ok)
+					return
+				}
+			}
+		}
+
+		var wg sync.WaitGroup
+		go readConnection(&wg, client)
+		wg.Add(1)
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte("/validate\n"))
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
+
+		if waitTimeout(&wg, 1*time.Second) {
+			t.Fatal("Timed out waiting for wait group")
+		} else {
+			client.Close()
+			server.Close()
+
+			removeDatabaseFiles()
+		}
 	}
 }
