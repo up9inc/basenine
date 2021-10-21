@@ -1,3 +1,7 @@
+// Copyright 2021 UP9. All rights reserved.
+// Use of this source code is governed by Apache License 2.0
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
@@ -9,6 +13,7 @@ import (
 	oj "github.com/ohler55/ojg/oj"
 )
 
+// bool operand evaluator. Boolean literals falls into this method.
 func boolOperand(operand interface{}) bool {
 	var _operand bool
 	switch operand.(type) {
@@ -26,6 +31,7 @@ func boolOperand(operand interface{}) bool {
 	return _operand
 }
 
+// string operand evaluator. String literals falls into this method.
 func stringOperand(operand interface{}) string {
 	var _operand string
 	switch operand.(type) {
@@ -43,6 +49,7 @@ func stringOperand(operand interface{}) string {
 	return _operand
 }
 
+// float64 operand evaluator. Any integer or float literal falls into this method.
 func float64Operand(operand interface{}) float64 {
 	var _operand float64
 	switch operand.(type) {
@@ -76,6 +83,7 @@ func or(operand1 interface{}, operand2 interface{}) bool {
 	return boolOperand(operand1) || boolOperand(operand2)
 }
 
+// Map of logical operations
 var logicalOperations = map[string]interface{}{
 	"and": and,
 	"or":  or,
@@ -109,6 +117,7 @@ func neq(operand1 interface{}, operand2 interface{}) bool {
 	}
 }
 
+// Map of equality operations
 var equalityOperations = map[string]interface{}{
 	"==": eql,
 	"!=": neq,
@@ -130,6 +139,7 @@ func leq(operand1 interface{}, operand2 interface{}) bool {
 	return float64Operand(operand1) <= float64Operand(operand2)
 }
 
+// Map of comparison operations
 var comparisonOperations = map[string]interface{}{
 	">":  gtr,
 	"<":  lss,
@@ -160,6 +170,7 @@ func datetime(args ...interface{}) interface{} {
 	}
 }
 
+// Map of helper methods
 var helpers = map[string]interface{}{
 	"startsWith": startsWith,
 	"endsWith":   endsWith,
@@ -167,6 +178,7 @@ var helpers = map[string]interface{}{
 	"datetime":   datetime,
 }
 
+// Iterates and evaulates each parameter of a given function call
 func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err error) {
 	for _, param := range params {
 		var v interface{}
@@ -176,6 +188,7 @@ func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err
 	return
 }
 
+// Recurses to evalExpression
 func evalSelectExpression(sel *SelectExpression, obj interface{}) (v interface{}, err error) {
 	if sel.Expression != nil {
 		v, err = evalExpression(sel.Expression, obj)
@@ -185,6 +198,7 @@ func evalSelectExpression(sel *SelectExpression, obj interface{}) (v interface{}
 	return
 }
 
+// Gateway method for evalSelectExpression
 func evalCallExpression(call *CallExpression, obj interface{}) (v interface{}, err error) {
 	if call.SelectExpression != nil {
 		v, err = evalSelectExpression(call.SelectExpression, obj)
@@ -194,14 +208,19 @@ func evalCallExpression(call *CallExpression, obj interface{}) (v interface{}, e
 	return
 }
 
+// Evaluates boolean, integer, float, string literals and call, sub-, select expressions.
 func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 	if pri.Bool != nil {
+		// `true`, `false` goes here
 		v = *pri.Bool
 	} else if pri.Number != nil {
+		// `42`, `3.14` goes here
 		v = *pri.Number
 	} else if pri.String != nil {
+		// `"hello"`` goes here
 		v = strings.Trim(*pri.String, "\"")
 	} else if pri.JsonPath != nil {
+		// `request.path` goes here
 		result := pri.JsonPath.Get(obj)
 		if len(result) < 1 {
 			v = false
@@ -209,6 +228,7 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 			v = result[0]
 		}
 
+		// `brand.name.startsWith("Chev")` goes here
 		if pri.Helper != nil && pri.CallExpression != nil {
 			var params []interface{}
 			params, err = evalParameters(pri.CallExpression.Parameters, obj)
@@ -216,17 +236,22 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 			v = helpers[*pri.Helper].(func(args ...interface{}) interface{})(params...)
 		}
 	} else if pri.Regexp != nil {
+		// `r"Chev.*"` goes here
 		v = pri.Regexp
 	} else if pri.SubExpression != nil {
+		// `(5 == a)` goes here
 		v, err = evalExpression(pri.SubExpression, obj)
 	} else if pri.CallExpression != nil {
+		// `request.headers["a"]` or `request.path[0]` or `brand["name"].startsWith("Chev")` goes here
 		v, err = evalCallExpression(pri.CallExpression, obj)
 	} else {
+		// Result defaults to `false`
 		v = false
 	}
 	return
 }
 
+// Evaluates unary expressions like `!`, `-`
 func evalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
 	if unar.Unary != nil {
 		v, err = evalUnary(unar.Unary, obj)
@@ -250,6 +275,7 @@ func evalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
 	return
 }
 
+// Evaluates comparison expressions like `>=`, `>`, `<=`, `<`
 func evalComparison(comp *Comparison, obj interface{}) (v interface{}, err error) {
 	logic, err := evalUnary(comp.Unary, obj)
 	if err != nil {
@@ -271,6 +297,7 @@ func evalComparison(comp *Comparison, obj interface{}) (v interface{}, err error
 	return
 }
 
+// Evaluates equality expressions like `!=`, `==`
 func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
 	comp, err := evalComparison(equ.Comparison, obj)
 	if err != nil {
@@ -292,6 +319,7 @@ func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
 	return
 }
 
+// Evaluates logical expressions like `and`, `or`
 func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
 	unar, err := evalEquality(logic.Equality, obj)
 	if err != nil {
@@ -313,6 +341,7 @@ func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
 	return
 }
 
+// Evaluates the root of AST
 func evalExpression(expr *Expression, obj interface{}) (v interface{}, err error) {
 	if expr.Logical == nil {
 		v = true
@@ -322,6 +351,14 @@ func evalExpression(expr *Expression, obj interface{}) (v interface{}, err error
 	return
 }
 
+// Eval evaluatues boolean truthiness of given JSON against the query that's provided
+// in the form of an AST (Expression). It's the method that implements the querying
+// functionality in the database.
+//
+// It's a lazy and a generic implementation to provide a medium for flexible filtering
+// on an arbitrary JSON structure.
+//
+// Calling Precompute() on Expression before calling Eval() improves performance.
 func Eval(expr *Expression, json string) (truth bool, err error) {
 	obj, err := oj.ParseString(json)
 	if err != nil {

@@ -1,3 +1,7 @@
+// Copyright 2021 UP9. All rights reserved.
+// Use of this source code is governed by Apache License 2.0
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
@@ -67,6 +71,9 @@ type Parameter struct {
 
 var parser = participle.MustBuild(&Expression{}, participle.UseLookahead(2))
 
+// Parse parses the query (filtering syntax) into tree stucture
+// defined as Expression. Tags defines the grammar rules and tokens.
+// Expression is the Abstract Syntax Tree (AST) of this query language.
 func Parse(text string) (expr *Expression, err error) {
 	expr = &Expression{}
 	if text == "" {
