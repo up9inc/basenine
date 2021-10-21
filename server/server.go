@@ -139,17 +139,11 @@ func periodicPartitioner(f *os.File) {
 }
 
 func periodicFileSyncer(f *os.File) {
-	var lastPartitionIndex int64
 	for {
 		time.Sleep(10 * time.Millisecond)
-		if cs.partitionIndex > lastPartitionIndex {
-			var err error
-			cs.Lock()
-			lastPartitionIndex = cs.partitionIndex
-			f, err = os.OpenFile(cs.partitions[cs.partitionIndex].Name(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			cs.Unlock()
-			check(err)
-		}
+		cs.RLock()
+		f = cs.partitions[cs.partitionIndex]
+		cs.RUnlock()
 		f.Sync()
 	}
 }
@@ -165,19 +159,15 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 
 	var mode ConnectionMode = NONE
 	var f *os.File
-	var err error
-	var lastPartitionIndex int64
 
 	defer f.Close()
 
 	for {
-		if cs.partitionIndex > lastPartitionIndex {
-			cs.Lock()
-			lastPartitionIndex = cs.partitionIndex
-			f, err = os.OpenFile(cs.partitions[cs.partitionIndex].Name(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			cs.Unlock()
-			check(err)
+		cs.RLock()
+		if cs.partitionIndex > -1 {
+			f = cs.partitions[cs.partitionIndex]
 		}
+		cs.RUnlock()
 
 		ok := scanner.Scan()
 
@@ -193,13 +183,7 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 		case NONE:
 			mode = _mode
 			if mode == INSERT {
-				cs.Lock()
-				cs.partitionIndex += 1
-				lastPartitionIndex = cs.partitionIndex
-				f, err = os.OpenFile(fmt.Sprintf("%s_%06d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				check(err)
-				cs.partitions = append(cs.partitions, f)
-				cs.Unlock()
+				f = newPartition()
 				go periodicFileSyncer(f)
 				go periodicPartitioner(f)
 			}
@@ -389,7 +373,7 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	l := len(cs.offsets)
 	cs.RUnlock()
 
-	if index-1 > l {
+	if index >= l {
 		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", index)))
 		return
 	}
@@ -397,13 +381,13 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	cs.RLock()
 	n := cs.offsets[index]
 	i := cs.partitionRefs[index]
-	cs.RUnlock()
-
 	f, err := os.Open(cs.partitions[i].Name())
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Record does not exist!\n")))
 		return
 	}
+	cs.RUnlock()
+
 	f.Seek(n, 0)
 	var b []byte
 	b, n, err = readRecord(f, n)
