@@ -342,7 +342,7 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 	return
 }
 
-// check throws a panic if the given error is not nil.
+// check panics if the given error is not nil.
 func check(e error) {
 	if e != nil {
 		panic(e)
