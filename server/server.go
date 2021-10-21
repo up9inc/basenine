@@ -432,6 +432,33 @@ func readRecord(f *os.File, seek int64) (b []byte, n int64, err error) {
 	return
 }
 
+// POSIX compliant method for checking whether connection was closed by the peer or not
+func connCheck(conn net.Conn) error {
+	var sysErr error = nil
+	rc, err := conn.(syscall.Conn).SyscallConn()
+	if err != nil {
+		return err
+	}
+	err = rc.Read(func(fd uintptr) bool {
+		var buf []byte = []byte{0}
+		n, _, err := syscall.Recvfrom(int(fd), buf, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
+		switch {
+		case n == 0 && err == nil:
+			sysErr = io.EOF
+		case err == syscall.EAGAIN || err == syscall.EWOULDBLOCK:
+			sysErr = nil
+		default:
+			sysErr = err
+		}
+		return true
+	})
+	if err != nil {
+		return err
+	}
+
+	return sysErr
+}
+
 // streamRecords is an infinite loop that only called in case of QUERY TCP connection mode.
 // It expands marcros, parses the given query, does compile-time evaluations with Precompute() call
 // and filters out the records according to query.
@@ -459,6 +486,11 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 	for {
 		time.Sleep(10 * time.Millisecond)
+
+		err = connCheck(conn)
+		if err != nil {
+			return
+		}
 
 		// Safely access the current partition index
 		cs.Lock()
@@ -522,7 +554,10 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 			// Write the record into TCP connection if it passes the query.
 			if truth {
-				conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+				_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+				if err != nil {
+					fmt.Printf("err: %v\n", err)
+				}
 			}
 		}
 
