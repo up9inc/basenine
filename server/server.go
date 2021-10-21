@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -34,6 +35,7 @@ import (
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
 var port = flag.Int("port", 9099, "The port to listen on; default is 9099.")
+var debug = flag.Bool("debug", false, "Enable debug logs")
 
 type ConnectionMode int
 
@@ -115,7 +117,7 @@ func main() {
 	// Parse the command-line arguments.
 	flag.Parse()
 
-	fmt.Println("Starting server...")
+	log.Println("Starting server...")
 
 	// Clean up the database files.
 	removeDatabaseFiles()
@@ -128,7 +130,7 @@ func main() {
 	// Start listenning to given address and port.
 	src := *addr + ":" + strconv.Itoa(*port)
 	listener, _ := net.Listen("tcp", src)
-	fmt.Printf("Listening on %s.\n", src)
+	log.Printf("Listening on %s.\n", src)
 
 	defer listener.Close()
 
@@ -148,7 +150,7 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Printf("Some connection error: %s\n", err)
+			log.Printf("Connection error: %s\n", err)
 		}
 
 		// Handle the TCP connection.
@@ -230,7 +232,7 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 
 	// Log the connection
 	remoteAddr := conn.RemoteAddr().String()
-	fmt.Println("Client connected from " + remoteAddr)
+	log.Println("Client connected from " + remoteAddr)
 
 	// Create a scanner
 	scanner := bufio.NewScanner(conn)
@@ -257,8 +259,10 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 		ok := scanner.Scan()
 
 		if !ok {
-			err := scanner.Err()
-			fmt.Printf("err: %v\n", err)
+			if *debug {
+				err := scanner.Err()
+				log.Printf("Scanning error: %v\n", err)
+			}
 			break
 		}
 
@@ -290,7 +294,7 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 	}
 
 	// Log the disconnect
-	fmt.Println("Client at " + remoteAddr + " disconnected.")
+	log.Println("Client at " + remoteAddr + " disconnected.")
 
 	// In case of an INSERT mode client is disconnected, clean up the database files.
 	if mode == INSERT {
@@ -309,7 +313,9 @@ func quitConnections() {
 // handleMessage handles given message string of a TCP connection and returns a
 // ConnectionMode to set the mode of the that TCP connection.
 func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []byte) {
-	fmt.Println("> " + message)
+	if *debug {
+		log.Println("> " + message)
+	}
 
 	if len(message) > 0 && message[0] == '/' {
 		switch {
@@ -389,8 +395,10 @@ func insertData(f *os.File, data []byte) {
 	n, err := f.WriteAt(data, lastOffset)
 	check(err)
 
-	// Log the amount of bytes that are written into the database.
-	fmt.Printf("wrote %d bytes\n", n)
+	if *debug {
+		// Log the amount of bytes that are written into the database.
+		log.Printf("Wrote %d bytes to the partition: %s\n", n, f.Name())
+	}
 
 	// Safely update the offsets and paritition references.
 	cs.Lock()
