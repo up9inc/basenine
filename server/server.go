@@ -146,6 +146,9 @@ func main() {
 		os.Exit(1)
 	}()
 
+	go periodicFileSyncer()
+	go periodicPartitioner()
+
 	// Start accepting TCP connections.
 	for {
 		conn, err := listener.Accept()
@@ -184,7 +187,8 @@ func removeDatabaseFiles() {
 // periodicPartitioner is a Goroutine that handles database parititioning according
 // to the database size limit that's set by /limit command.
 // Triggered every second.
-func periodicPartitioner(f *os.File) {
+func periodicPartitioner() {
+	var f *os.File
 	for {
 		time.Sleep(1 * time.Second)
 		if dbSizeLimit == 0 {
@@ -213,12 +217,18 @@ func periodicPartitioner(f *os.File) {
 }
 
 // periodicFileSyncer is a Goroutine that handles
-// commiting the current contents of the file to stable storage
+// commiting the current contents of the file (partition) to stable storage
 // by calling f.Sync() every 10 milliseconds.
-func periodicFileSyncer(f *os.File) {
+func periodicFileSyncer() {
+	var f *os.File
 	for {
 		time.Sleep(10 * time.Millisecond)
 		cs.RLock()
+		if cs.partitionIndex == -1 {
+			cs.RUnlock()
+			time.Sleep(1 * time.Second)
+			continue
+		}
 		f = cs.partitions[cs.partitionIndex]
 		cs.RUnlock()
 		f.Sync()
@@ -275,8 +285,6 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 			mode = _mode
 			if mode == INSERT {
 				f = newPartition()
-				go periodicFileSyncer(f)
-				go periodicPartitioner(f)
 			}
 		case INSERT:
 			insertData(f, data)
