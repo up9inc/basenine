@@ -30,6 +30,7 @@ const (
 	SINGLE
 	VALIDATE
 	MACRO
+	LIMIT
 )
 
 type Commands int
@@ -40,12 +41,13 @@ const (
 	CMD_SINGLE   string = "/single"
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
+	CMD_LIMIT    string = "/limit"
 )
 
 const DB_FILE string = "data"
 const DB_FILE_EXT string = "bin"
 
-var dbSizeLimit int64 = 2000000 / 2
+var dbSizeLimit int64 = 0
 
 var connections []net.Conn
 
@@ -197,6 +199,8 @@ func handleConnection(c chan os.Signal, conn net.Conn) {
 			validateQuery(conn, data)
 		case MACRO:
 			applyMacro(conn, data)
+		case LIMIT:
+			setLimit(conn, data)
 		}
 	}
 
@@ -233,6 +237,9 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 
 		case strings.HasPrefix(message, CMD_MACRO):
 			mode = MACRO
+
+		case strings.HasPrefix(message, CMD_LIMIT):
+			mode = LIMIT
 
 		default:
 			conn.Write([]byte("Unrecognized command.\n"))
@@ -422,6 +429,18 @@ func applyMacro(conn net.Conn, data []byte) {
 	expanded := strings.TrimSpace(s[1])
 
 	addMacro(macro, expanded)
+
+	conn.Write([]byte(fmt.Sprintf("OK\n")))
+}
+
+func setLimit(conn net.Conn, data []byte) {
+	value, err := strconv.Atoi(string(data))
+
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("Error: While converting the limit to integer: %s\n", err.Error())))
+	}
+
+	dbSizeLimit = int64(value) / 2
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }

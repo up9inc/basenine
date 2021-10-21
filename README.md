@@ -30,6 +30,7 @@ const (
 	SINGLE
     VALIDATE
     MACRO
+    LIMIT
 )
 ```
 
@@ -44,6 +45,9 @@ Query mode streams the results to the client and is able to keep up where it lef
 **Validate mode** checks the query against syntax errors. Returns the error if it's syntactically invalid otherwise returns `OK`.
 
 **Macro mode** let's you define a macro for the query language like `http~proto.name == "http"`.
+
+**Limit mode** allows you to set a hard-limit for the database size in bytes like `1000000` (1MB). The disk usage ranges between `500000` and `1000000`.
+So the actual effective limit is the half of this value.
 
 ## Client
 
@@ -223,6 +227,14 @@ It should return `1:1: unexpected token "="`.
 Run the client:
 
 `go run client/macro.go -host localhost -port 8000 -macro "chevy~brand.name == \"Chevrolet\""`
+
+### Limit
+
+Run the client:
+
+`go run client/limit.go -host localhost -port 8000 -limit 1000000`
+
+It should return `OK`.
 
 ## TODOS
 
