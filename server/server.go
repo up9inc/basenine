@@ -261,7 +261,7 @@ func insertData(f *os.File, data []byte) {
 	l := len(cs.offsets)
 	lastOffset = cs.lastOffset
 	cs.RUnlock()
-	d["id"] = l - 1
+	d["id"] = l
 	data, _ = json.Marshal(d)
 
 	var length int64 = int64(len(data))
