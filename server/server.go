@@ -100,7 +100,7 @@ func main() {
 func newPartition() *os.File {
 	cs.Lock()
 	cs.partitionIndex += 1
-	f, err := os.OpenFile(fmt.Sprintf("%s_%06d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT), os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fmt.Sprintf("%s_%09d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT), os.O_CREATE|os.O_WRONLY, 0644)
 	check(err)
 	cs.partitions = append(cs.partitions, f)
 	cs.lastOffset = 0
