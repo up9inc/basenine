@@ -28,9 +28,9 @@ const (
 	INSERT
 	QUERY
 	SINGLE
-    VALIDATE
-    MACRO
-    LIMIT
+	VALIDATE
+	MACRO
+	LIMIT
 )
 ```
 
