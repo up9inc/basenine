@@ -378,15 +378,16 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 		return
 	}
 
+	var f *os.File
 	cs.RLock()
 	n := cs.offsets[index]
 	i := cs.partitionRefs[index]
-	f, err := os.Open(cs.partitions[i].Name())
+	f, err = os.Open(cs.partitions[i].Name())
+	cs.RUnlock()
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Record does not exist!\n")))
 		return
 	}
-	cs.RUnlock()
 
 	f.Seek(n, 0)
 	var b []byte
