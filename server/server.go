@@ -498,7 +498,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		}
 
 		// Seek into the last offset that's tracked by n
-		f.Seek(n, 0)
+		f.Seek(n, io.SeekStart)
 
 		// Read the records until seeing EOF
 		for {
@@ -566,7 +566,7 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 
 	// If we got to this point then it means the record is there
 	// Read it using its offset (which is n) and return it.
-	f.Seek(n, 0)
+	f.Seek(n, io.SeekStart)
 	var b []byte
 	b, n, err = readRecord(f, n)
 	conn.Write([]byte(fmt.Sprintf("%s\n", b)))
