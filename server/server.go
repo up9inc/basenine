@@ -526,6 +526,16 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	}
 }
 
+// Safely acces the offsets and partition references
+func getOffsetAndPartition(index int) (offset int64, f *os.File, err error) {
+	cs.RLock()
+	offset = cs.offsets[index]
+	i := cs.partitionRefs[index]
+	f, err = os.Open(cs.partitions[i].Name())
+	cs.RUnlock()
+	return
+}
+
 // retrieveSingle fetches a single record from the database.
 func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	// Convert index value provided as string to integer
@@ -547,12 +557,7 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	}
 
 	// Safely acces the offsets and partition references
-	var f *os.File
-	cs.RLock()
-	n := cs.offsets[index]
-	i := cs.partitionRefs[index]
-	f, err = os.Open(cs.partitions[i].Name())
-	cs.RUnlock()
+	n, f, err := getOffsetAndPartition(index)
 
 	// Record can only be removed if the partition of the record
 	// that it belongs to is removed. Therefore a file open error

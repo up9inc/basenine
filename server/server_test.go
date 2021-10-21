@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,14 +46,7 @@ func TestServerInsertAndReadData(t *testing.T) {
 		insertData(f, []byte(payload))
 
 		// Safely acces the offsets and partition references
-		var rf *os.File
-		var err error
-		cs.RLock()
-		n := cs.offsets[index]
-		i := cs.partitionRefs[index]
-		rf, err = os.Open(cs.partitions[i].Name())
-		cs.RUnlock()
-
+		n, rf, err := getOffsetAndPartition(index)
 		assert.Nil(t, err)
 
 		rf.Seek(n, io.SeekStart)
