@@ -13,7 +13,7 @@ import (
 )
 
 var host = flag.String("host", "localhost", "The hostname or IP to connect to; defaults to \"localhost\".")
-var port = flag.Int("port", 8000, "The port to connect to; defaults to 8000.")
+var port = flag.Int("port", 9099, "The port to connect to; defaults to 9099.")
 var limit = flag.Int("limit", 1000000, "Database size limit in bytes.")
 
 func main() {

@@ -8,7 +8,7 @@
 //
 // The server can be with a command like below:
 //
-//   basenine -addr -addr 127.0.0.1 -port 8000
+//   basenine -addr -addr 127.0.0.1 -port 9099
 //
 // which sets the host address and TCP port.
 //
@@ -33,7 +33,7 @@ import (
 )
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
-var port = flag.Int("port", 8000, "The port to listen on; default is 8000.")
+var port = flag.Int("port", 9099, "The port to listen on; default is 9099.")
 
 type ConnectionMode int
 

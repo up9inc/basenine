@@ -18,7 +18,7 @@ Schema-free, document-oriented streaming database that optimized for monitoring 
 
 Run the server:
 
-`make && build/basenine -port 8000`
+`make && build/basenine -port 9099`
 
 The database server has three modes:
 
@@ -59,7 +59,7 @@ Clients vary according to the three connection modes.
 
 Run the client:
 
-`go run client/insert.go -host localhost -port 8000`
+`go run client/insert.go -host localhost -port 9099`
 
 The client example for the **insert mode** defines these four structs:
 
@@ -124,7 +124,7 @@ for i := 0; i < 10000000; i++ {
 
 Run the client:
 
-`go run client/query.go -host localhost -port 8000 -query "brand.name == \"Chevrolet\""`
+`go run client/query.go -host localhost -port 9099 -query "brand.name == \"Chevrolet\""`
 
 It establishes as a **query mode** connection to the server with:
 
@@ -152,7 +152,7 @@ Try to stop <kbd>CTRL</kbd>+<kbd>C</kbd> and re-run the client after a while. It
 
 Try to negate the query and run:
 
-`go run client/query.go -host localhost -port 8000 -query "brand.name != \"Chevrolet\""`
+`go run client/query.go -host localhost -port 9099 -query "brand.name != \"Chevrolet\""`
 
 ```text
 ...
@@ -168,23 +168,23 @@ This time, the records of other struct will be printed.
 
 Also try the queries below:
 
-`go run client/query.go -host localhost -port 8000`
+`go run client/query.go -host localhost -port 9099`
 
-`go run client/query.go -host localhost -port 8000 -query ""`
+`go run client/query.go -host localhost -port 9099 -query ""`
 
-`go run client/query.go -host localhost -port 8000 -query "id == 3"`
+`go run client/query.go -host localhost -port 9099 -query "id == 3"`
 
-`go run client/query.go -host localhost -port 8000 -query "model == \"Camaro\""`
+`go run client/query.go -host localhost -port 9099 -query "model == \"Camaro\""`
 
-`go run client/query.go -host localhost -port 8000 -query "year == 1636"`
+`go run client/query.go -host localhost -port 9099 -query "year == 1636"`
 
-`go run client/query.go -host localhost -port 8000 -query "year == 2021"`
+`go run client/query.go -host localhost -port 9099 -query "year == 2021"`
 
-`go run client/query.go -host localhost -port 8000 -query "league.name == \"Ivy\""`
+`go run client/query.go -host localhost -port 9099 -query "league.name == \"Ivy\""`
 
-`go run client/query.go -host localhost -port 8000 -query "league.name != \"Ivy\""`
+`go run client/query.go -host localhost -port 9099 -query "league.name != \"Ivy\""`
 
-`go run client/query.go -host localhost -port 8000 -query "score == 4.8"`
+`go run client/query.go -host localhost -port 9099 -query "score == 4.8"`
 
 > Note: Closing 10 million records gap took 53 seconds in our tests. Which is equal to `1006M	data.bin` file. (~1GB)
 
@@ -192,7 +192,7 @@ Also try the queries below:
 
 Run the client:
 
-`go run client/single.go -host localhost -port 8000 -index 100`
+`go run client/single.go -host localhost -port 9099 -index 100`
 
 It establishes as a **single mode** connection to the server with:
 
@@ -203,7 +203,7 @@ conn.Write([]byte("/single\n"))
 and retrieves a single record based on the index provided with `-index`:
 
 ```text
-Connecting to localhost:8000...
+Connecting to localhost:9099...
 ** {"id":100,"name":"Harvard","league":{"name":"Ivy"},"address":"Massachusetts","enrollment":5000,"score":4.8,"year":1636}
 >
 ```
@@ -212,13 +212,13 @@ Connecting to localhost:8000...
 
 Run the client:
 
-`go run client/validate.go -host localhost -port 8000 -query "brand.name == \"Chevrolet\""`
+`go run client/validate.go -host localhost -port 9099 -query "brand.name == \"Chevrolet\""`
 
 It should return `OK`.
 
 Run the client:
 
-`go run client/validate.go -host localhost -port 8000 -query "=.="`
+`go run client/validate.go -host localhost -port 9099 -query "=.="`
 
 It should return `1:1: unexpected token "="`.
 
@@ -226,13 +226,13 @@ It should return `1:1: unexpected token "="`.
 
 Run the client:
 
-`go run client/macro.go -host localhost -port 8000 -macro "chevy~brand.name == \"Chevrolet\""`
+`go run client/macro.go -host localhost -port 9099 -macro "chevy~brand.name == \"Chevrolet\""`
 
 ### Limit
 
 Run the client:
 
-`go run client/limit.go -host localhost -port 8000 -limit 1000000`
+`go run client/limit.go -host localhost -port 9099 -limit 1000000`
 
 It should return `OK`.
 
