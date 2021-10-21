@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBasicBoolean(t *testing.T) {
+func TestParserBasicBoolean(t *testing.T) {
 	text := `
 http or !amqp
 	`
@@ -55,7 +55,7 @@ http or !amqp
 	assert.Equal(t, expect, expr)
 }
 
-func TestBooleanLiterals(t *testing.T) {
+func TestParserBooleanLiterals(t *testing.T) {
 	text := `
 true and false
 	`
@@ -94,7 +94,7 @@ true and false
 	assert.Equal(t, expect, expr)
 }
 
-func TestCompoundBoolean(t *testing.T) {
+func TestParserCompoundBoolean(t *testing.T) {
 	text := `
 true and 5 == a
 	`
@@ -149,7 +149,7 @@ true and 5 == a
 	assert.Equal(t, expect, expr)
 }
 
-func TestNegatedCompoundBoolean(t *testing.T) {
+func TestParserNegatedCompoundBoolean(t *testing.T) {
 	text := `
 true and !(5 == a)
 	`
@@ -219,7 +219,7 @@ true and !(5 == a)
 	assert.Equal(t, expect, expr)
 }
 
-func TestSubExpression(t *testing.T) {
+func TestParserSubExpression(t *testing.T) {
 	text := `
 (a.b == "hello") and (x.y > 3.14)
 	`
@@ -309,7 +309,7 @@ func TestSubExpression(t *testing.T) {
 	assert.Equal(t, expect, expr)
 }
 
-func TestRegexLiteral(t *testing.T) {
+func TestParserRegexLiteral(t *testing.T) {
 	text := `
 request == r"hello.*"
 	`
@@ -351,7 +351,7 @@ request == r"hello.*"
 	assert.Equal(t, expect, expr)
 }
 
-func TestComplexQuery(t *testing.T) {
+func TestParserComplexQuery(t *testing.T) {
 	text := `
 http and request.method == "GET" and request.path == "/example" and (request.query.a == "b" or request.headers.x == "y")
 	`
@@ -498,7 +498,7 @@ http and request.method == "GET" and request.path == "/example" and (request.que
 	assert.Equal(t, expect, expr)
 }
 
-func TestSelectExpressionIndex(t *testing.T) {
+func TestParserSelectExpressionIndex(t *testing.T) {
 	text := `
 request.path[1] == "hello"
 	`
@@ -544,7 +544,7 @@ request.path[1] == "hello"
 	assert.Equal(t, expect, expr)
 }
 
-func TestSelectExpressionKey(t *testing.T) {
+func TestParserSelectExpressionKey(t *testing.T) {
 	text := `
 !request.headers["user-agent"] == "kube-probe"
 	`
@@ -593,7 +593,7 @@ func TestSelectExpressionKey(t *testing.T) {
 	assert.Equal(t, expect, expr)
 }
 
-func TestFunctionCall(t *testing.T) {
+func TestParserFunctionCall(t *testing.T) {
 	text := `
 a.b(3, 5)
 	`
@@ -658,7 +658,7 @@ a.b(3, 5)
 	assert.Equal(t, expect, expr)
 }
 
-func TestSelectExpressionChainFunction(t *testing.T) {
+func TestParserSelectExpressionChainFunction(t *testing.T) {
 	text := `
 !http or !request.headers["user-agent"].startsWith("kube-probe")
 	`
@@ -748,7 +748,7 @@ func TestSelectExpressionChainFunction(t *testing.T) {
 	assert.Equal(t, expect, expr)
 }
 
-func TestRulesAssertionSyntax(t *testing.T) {
+func TestParserRulesAssertionSyntax(t *testing.T) {
 	text := `
 rule(
 	description: "Holy in name property",
@@ -1158,7 +1158,7 @@ rule(
 	assert.Equal(t, expect, expr)
 }
 
-func TestSyntaxErrorLiteralNotTerminated(t *testing.T) {
+func TestParserSyntaxErrorLiteralNotTerminated(t *testing.T) {
 	text := `
 =.="
 	`
@@ -1166,7 +1166,7 @@ func TestSyntaxErrorLiteralNotTerminated(t *testing.T) {
 	assert.EqualError(t, err, "2:5: literal not terminated")
 }
 
-func TestSyntaxErrorUnexpectedToken(t *testing.T) {
+func TestParserSyntaxErrorUnexpectedToken(t *testing.T) {
 	text := `
 request.path[3.14] == "hello"
 	`
