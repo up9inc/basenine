@@ -98,7 +98,7 @@ func main() {
 func newPartition() *os.File {
 	cs.Lock()
 	cs.partitionIndex += 1
-	f, err := os.OpenFile(fmt.Sprintf("%s_%06d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fmt.Sprintf("%s_%06d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT), os.O_CREATE|os.O_WRONLY, 0644)
 	check(err)
 	cs.partitions = append(cs.partitions, f)
 	cs.lastOffset = 0
@@ -256,9 +256,12 @@ func insertData(f *os.File, data []byte) {
 		panic(err)
 	}
 
-	cs.Lock()
+	var lastOffset int64
+	cs.RLock()
 	l := len(cs.offsets)
-	d["id"] = l
+	lastOffset = cs.lastOffset
+	cs.RUnlock()
+	d["id"] = l - 1
 	data, _ = json.Marshal(d)
 
 	var length int64 = int64(len(data))
@@ -267,13 +270,14 @@ func insertData(f *os.File, data []byte) {
 	binary.LittleEndian.PutUint64(b, uint64(length))
 
 	data = append(b, data...)
-	n, err := f.Write(data)
+	n, err := f.WriteAt(data, lastOffset)
 	check(err)
 	fmt.Printf("wrote %d bytes\n", n)
 
-	cs.offsets = append(cs.offsets, cs.lastOffset)
+	cs.Lock()
+	cs.offsets = append(cs.offsets, lastOffset)
 	cs.partitionRefs = append(cs.partitionRefs, cs.partitionIndex)
-	cs.lastOffset = cs.lastOffset + 8 + length
+	cs.lastOffset = lastOffset + 8 + length
 	cs.Unlock()
 }
 
