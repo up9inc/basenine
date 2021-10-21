@@ -265,11 +265,9 @@ func insertData(f *os.File, data []byte) {
 
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(length))
-	n, err := f.Write(b)
-	check(err)
-	fmt.Printf("wrote %d bytes\n", n)
 
-	n, err = f.Write(data)
+	data = append(b, data...)
+	n, err := f.Write(data)
 	check(err)
 	fmt.Printf("wrote %d bytes\n", n)
 
