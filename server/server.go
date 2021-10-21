@@ -195,6 +195,16 @@ func periodicPartitioner() {
 		if dbSizeLimit == 0 {
 			continue
 		}
+
+		// Safely access the current partition index and get the current partition
+		cs.RLock()
+		if cs.partitionIndex == -1 {
+			cs.RUnlock()
+			continue
+		}
+		f = cs.partitions[cs.partitionIndex]
+		cs.RUnlock()
+
 		info, err := f.Stat()
 		check(err)
 		currentSize := info.Size()
@@ -224,6 +234,8 @@ func periodicFileSyncer() {
 	var f *os.File
 	for {
 		time.Sleep(10 * time.Millisecond)
+
+		// Safely access the current partition index and get the current partition
 		cs.RLock()
 		if cs.partitionIndex == -1 {
 			cs.RUnlock()
@@ -232,6 +244,7 @@ func periodicFileSyncer() {
 		}
 		f = cs.partitions[cs.partitionIndex]
 		cs.RUnlock()
+
 		f.Sync()
 	}
 }
