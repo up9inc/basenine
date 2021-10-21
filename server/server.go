@@ -157,7 +157,7 @@ func main() {
 		}
 
 		// Handle the TCP connection.
-		go handleConnection(c, conn)
+		go handleConnection(conn)
 	}
 }
 
@@ -236,7 +236,7 @@ func periodicFileSyncer() {
 }
 
 // handleConnection handles a TCP connection
-func handleConnection(c chan os.Signal, conn net.Conn) {
+func handleConnection(conn net.Conn) {
 	// Append connection into a global slice
 	connections = append(connections, conn)
 
