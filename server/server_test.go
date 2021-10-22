@@ -380,44 +380,6 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	}
 }
 
-func TestServerProtocolInsertMode2(t *testing.T) {
-	cs = ConcurrentSlice{
-		partitionIndex: -1,
-	}
-
-	server, client := net.Pipe()
-	go handleConnection(server)
-
-	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/insert\n"))
-	client.Write([]byte(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`))
-	client.Write([]byte("\n"))
-
-	time.Sleep(500 * time.Millisecond)
-
-	index := 0
-	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
-
-	// Safely acces the offsets and partition references
-	n, rf, err := getOffsetAndPartition(index)
-	assert.Nil(t, err)
-
-	rf.Seek(n, io.SeekStart)
-	b, n, err := readRecord(rf, n)
-	assert.Nil(t, err)
-	assert.Greater(t, n, int64(0))
-	assert.Equal(t, expected, string(b))
-
-	rf.Close()
-
-	client.Close()
-	server.Close()
-
-	removeDatabaseFiles()
-
-	time.Sleep(500 * time.Millisecond)
-}
-
 func TestServerProtocolLimitMode(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	limit := int64(1000000) // 1MB
