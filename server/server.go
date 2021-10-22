@@ -126,7 +126,6 @@ func init() {
 	go periodicPartitioner(ticker)
 }
 
-// Main method that the program enters into
 func main() {
 	// Parse the command-line arguments.
 	flag.Parse()
@@ -277,7 +276,8 @@ func handleConnection(conn net.Conn) {
 		switch mode {
 		case NONE:
 			mode = _mode
-			if mode == INSERT {
+			// f being nil means there are not partitions created yet
+			if f == nil && mode == INSERT {
 				f = newPartition()
 			}
 		case INSERT:
@@ -559,7 +559,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				break
 			}
 
-			// Evaluate the current record agains the given query.
+			// Evaluate the current record against the given query.
 			truth, err := Eval(expr, string(b))
 			check(err)
 
