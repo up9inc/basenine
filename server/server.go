@@ -6,7 +6,7 @@
 // also defines a TCP-based protocol. Please refer to the client libraries
 // for communicating with the server.
 //
-// The server can be with a command like below:
+// The server can be run with a command like below:
 //
 //   basenine -addr -addr 127.0.0.1 -port 9099
 //
