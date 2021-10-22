@@ -221,6 +221,7 @@ func periodicPartitioner(ticker *time.Ticker) {
 				discarded := cs.partitions[cs.partitionIndex-2]
 				discarded.Close()
 				os.Remove(discarded.Name())
+				cs.partitions[cs.partitionIndex-2] = nil
 			}
 			cs.Unlock()
 			check(err)
@@ -490,10 +491,8 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	err = Precompute(expr)
 	check(err)
 
-	// n is the last offset we were reading
-	var n int64 = 0
-	// -1 means that the paritition start index is not decided yet.
-	var partitionStartIndex int64 = -1
+	// The state to track the last offset's index in cs.offsets
+	var leftOff int64 = 0
 
 	for {
 		time.Sleep(10 * time.Millisecond)
@@ -503,60 +502,55 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			return
 		}
 
-		// Safely access the current partition index
-		cs.Lock()
-		partitionIndex := cs.partitionIndex
-		cs.Unlock()
+		// Safely access the next part of offsets and partition references.
+		cs.RLock()
+		subOffsets := cs.offsets[leftOff:]
+		subPartitionRefs := cs.partitionRefs[leftOff:]
+		cs.RUnlock()
 
-		// Paritition index -1 means there no partitions started yet.
-		// Means that newPartition() is not called yet.
-		if partitionIndex == -1 {
-			continue
-		}
+		// f is the current partition we're reading the data from.
+		var f *os.File
+		for i, offset := range subOffsets {
+			leftOff++
 
-		// This condition is only true if the previous partition EOL-ed
-		// and the loop tries to continue with the next partition
-		// but there are no new partitions yet.
-		if partitionStartIndex > partitionIndex {
-			partitionStartIndex = partitionIndex
-		} else {
-			// When the condition becomes false, it means that we switched
-			// to the new partitition so we start to read from the
-			// very first offset, which is 0.
-			n = 0
-		}
+			// Safely access the *os.File pointer that the current offset refers to.
+			cs.RLock()
+			fRef := cs.partitions[subPartitionRefs[i]]
+			cs.RUnlock()
 
-		// If the partitionStartIndex is still -1, means that we're still
-		// in the very first iteration
-		if partitionStartIndex == -1 {
-			// Set partitionStartIndex to latest partition
-			partitionStartIndex = partitionIndex
-			// but if there is a partition before the latest one
-			// set it to the previous partition.
-			if partitionIndex > 1 {
-				partitionStartIndex--
+			// File descriptor nil means; the partition is removed. So we pass this offset.
+			if fRef == nil {
+				continue
 			}
-		}
 
-		// Safely access and open the partition decided by partitionStartIndex
-		cs.Lock()
-		f, err := os.Open(cs.partitions[partitionStartIndex].Name())
-		cs.Unlock()
+			// f == nil means we didn't open any partition yet.
+			// fRef.Name() != f.Name() means we're switching to the next partition.
+			if f == nil || fRef.Name() != f.Name() {
+				if f != nil && fRef.Name() != f.Name() {
+					// We're switching to the next partition, close the current partition.
+					f.Close()
+				}
 
-		// If the file cannot be opened, try again. The file should be there.
-		if err != nil {
-			continue
-		}
+				// Open the partition that the current offset refers to.
+				f, err = os.Open(fRef.Name())
 
-		// Seek into the last offset that's tracked by n
-		f.Seek(n, io.SeekStart)
+				// If the file cannot be opened, pass.
+				if err != nil {
+					continue
+				}
+			}
 
-		// Read the records until seeing EOF
-		for {
+			// Seek to the offset
+			f.Seek(offset, io.SeekStart)
+
+			// Read the record into b
 			var b []byte
-			b, n, err = readRecord(f, n)
+			b, _, err = readRecord(f, offset)
+
+			// Even if it's EOF, continue.
+			// Because a later offset might point to a previous region of the file.
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				break
+				continue
 			}
 
 			// Evaluate the current record against the given query.
@@ -571,12 +565,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				}
 			}
 		}
-
-		// Close the current partition.
-		f.Close()
-
-		// Increment the partition index tracked by the this loop.
-		partitionStartIndex++
 	}
 }
 
@@ -627,7 +615,7 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	// Read it using its offset (which is n) and return it.
 	f.Seek(n, io.SeekStart)
 	var b []byte
-	b, n, err = readRecord(f, n)
+	b, _, err = readRecord(f, n)
 	f.Close()
 	conn.Write([]byte(fmt.Sprintf("%s\n", b)))
 	return
