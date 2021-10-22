@@ -38,6 +38,9 @@ func TestServerNewPartition(t *testing.T) {
 	f := newPartition()
 	assert.NotNil(t, f)
 	assert.FileExists(t, fmt.Sprintf("%s_%09d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT))
+
+	err := watcher.Remove(f.Name())
+	assert.Nil(t, err)
 	removeDatabaseFiles()
 }
 
@@ -79,6 +82,8 @@ func TestServerInsertAndReadData(t *testing.T) {
 		rf.Close()
 	}
 
+	err := watcher.Remove(f.Name())
+	assert.Nil(t, err)
 	removeDatabaseFiles()
 }
 
@@ -120,6 +125,8 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	assert.Greater(t, n, int64(0))
 	assert.Equal(t, expected, string(b))
 
+	err = watcher.Remove(rf.Name())
+	assert.Nil(t, err)
 	rf.Close()
 
 	client.Close()
@@ -187,6 +194,8 @@ func TestServerProtocolQueryMode(t *testing.T) {
 		client.Close()
 		server.Close()
 
+		err := watcher.Remove(f.Name())
+		assert.Nil(t, err)
 		removeDatabaseFiles()
 	}
 }
@@ -301,6 +310,8 @@ func TestServerProtocolValidateMode(t *testing.T) {
 			client.Close()
 			server.Close()
 
+			err := watcher.Remove(f.Name())
+			assert.Nil(t, err)
 			removeDatabaseFiles()
 		}
 	}
@@ -376,6 +387,8 @@ func TestServerProtocolMacroMode(t *testing.T) {
 		client.Close()
 		server.Close()
 
+		err := watcher.Remove(f.Name())
+		assert.Nil(t, err)
 		removeDatabaseFiles()
 	}
 }
@@ -430,6 +443,15 @@ func TestServerProtocolLimitMode(t *testing.T) {
 
 	client.Close()
 	server.Close()
+
+	cs.RLock()
+	f1 := cs.partitions[cs.partitionIndex]
+	f2 := cs.partitions[cs.partitionIndex-1]
+	err = watcher.Remove(f1.Name())
+	assert.Nil(t, err)
+	err = watcher.Remove(f2.Name())
+	assert.Nil(t, err)
+	cs.RUnlock()
 
 	removeDatabaseFiles()
 }
