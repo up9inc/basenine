@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -89,8 +90,8 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	server, client := net.Pipe()
 	go handleConnection(server)
 
-	client.Write([]byte("/insert\n"))
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/insert\n"))
 	client.Write([]byte(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`))
 	client.Write([]byte("\n"))
 
@@ -293,4 +294,170 @@ func TestServerProtocolValidateMode(t *testing.T) {
 			removeDatabaseFiles()
 		}
 	}
+}
+
+func TestServerProtocolMacroMode(t *testing.T) {
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+	macro := `chevy~brand.name == "Chevrolet"`
+	query := `chevy`
+
+	cs = ConcurrentSlice{
+		partitionIndex: -1,
+	}
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	f := newPartition()
+	assert.NotNil(t, f)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/macro\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", macro)))
+
+	client.Close()
+	server.Close()
+
+	server, client = net.Pipe()
+	go handleConnection(server)
+
+	for index := 0; index < 100; index++ {
+		insertData(f, []byte(payload))
+	}
+
+	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+		defer wg.Done()
+		index := 0
+		for {
+			scanner := bufio.NewScanner(conn)
+
+			for {
+				ok := scanner.Scan()
+				text := scanner.Text()
+
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+				index++
+				assert.Equal(t, expected, string(text))
+
+				if index > 99 {
+					return
+				}
+
+				assert.True(t, ok)
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, client)
+	wg.Add(1)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/query\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", query)))
+
+	if waitTimeout(&wg, 1*time.Second) {
+		t.Fatal("Timed out waiting for wait group")
+	} else {
+		client.Close()
+		server.Close()
+
+		removeDatabaseFiles()
+	}
+}
+
+func TestServerProtocolInsertMode2(t *testing.T) {
+	cs = ConcurrentSlice{
+		partitionIndex: -1,
+	}
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/insert\n"))
+	client.Write([]byte(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`))
+	client.Write([]byte("\n"))
+
+	time.Sleep(500 * time.Millisecond)
+
+	index := 0
+	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+
+	// Safely acces the offsets and partition references
+	n, rf, err := getOffsetAndPartition(index)
+	assert.Nil(t, err)
+
+	rf.Seek(n, io.SeekStart)
+	b, n, err := readRecord(rf, n)
+	assert.Nil(t, err)
+	assert.Greater(t, n, int64(0))
+	assert.Equal(t, expected, string(b))
+
+	rf.Close()
+
+	client.Close()
+	server.Close()
+
+	removeDatabaseFiles()
+
+	time.Sleep(500 * time.Millisecond)
+}
+
+func TestServerProtocolLimitMode(t *testing.T) {
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+	limit := int64(1000000) // 1MB
+
+	cs = ConcurrentSlice{
+		partitionIndex: -1,
+	}
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/limit\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", limit)))
+
+	client.Close()
+	server.Close()
+
+	server, client = net.Pipe()
+	go handleConnection(server)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/insert\n"))
+
+	for index := 0; index < 15000; index++ {
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(payload))
+		client.Write([]byte("\n"))
+		time.Sleep(500 * time.Microsecond)
+	}
+
+	var lastFile, secondLastFile *os.File
+
+	cs.RLock()
+	lastFile = cs.partitions[cs.partitionIndex]
+	secondLastFile = cs.partitions[cs.partitionIndex-1]
+	cs.RUnlock()
+
+	lastFileInfo, err := lastFile.Stat()
+	assert.Nil(t, err)
+	secondLastFileInfo, err := secondLastFile.Stat()
+	assert.Nil(t, err)
+
+	assert.Less(t, lastFileInfo.Size(), limit)
+	assert.Less(t, secondLastFileInfo.Size(), limit)
+
+	client.Close()
+	server.Close()
+
+	removeDatabaseFiles()
 }
