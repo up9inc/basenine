@@ -534,6 +534,12 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		partitionIndex := cs.partitionIndex
 		cs.Unlock()
 
+		// Paritition index -1 means there no partitions started yet.
+		// Means that newPartition() is not called yet.
+		if partitionIndex == -1 {
+			continue
+		}
+
 		// This condition is only true if the previous partition EOL-ed
 		// and the loop tries to continue with the next partition
 		// but there are no new partitions yet.
