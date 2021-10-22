@@ -82,6 +82,16 @@ func TestServerInsertAndReadData(t *testing.T) {
 	removeDatabaseFiles()
 }
 
+func TestServerConnCheck(t *testing.T) {
+	server, client := net.Pipe()
+	assert.Nil(t, connCheck(client))
+	assert.Nil(t, connCheck(server))
+	client.Close()
+	assert.Equal(t, io.ErrClosedPipe, connCheck(client))
+	server.Close()
+	assert.Equal(t, io.ErrClosedPipe, connCheck(server))
+}
+
 func TestServerProtocolInsertMode(t *testing.T) {
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
