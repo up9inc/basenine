@@ -247,18 +247,8 @@ func handleConnection(conn net.Conn) {
 
 	// Set connection mode to NONE
 	var mode ConnectionMode = NONE
-	var f *os.File
-
-	defer f.Close()
 
 	for {
-		// Safely access the current partition index and get the current partition
-		cs.RLock()
-		if cs.partitionIndex > -1 {
-			f = cs.partitions[cs.partitionIndex]
-		}
-		cs.RUnlock()
-
 		// Scan the input
 		ok := scanner.Scan()
 
@@ -277,12 +267,18 @@ func handleConnection(conn net.Conn) {
 		switch mode {
 		case NONE:
 			mode = _mode
-			// f being nil means there are not partitions created yet
-			if f == nil && mode == INSERT {
-				f = newPartition()
+			// partitionIndex -1 means there are not partitions created yet
+			if mode == INSERT {
+				// Safely access the current partition index
+				cs.RLock()
+				currentPartitionIndex := cs.partitionIndex
+				cs.RUnlock()
+				if currentPartitionIndex == -1 {
+					newPartition()
+				}
 			}
 		case INSERT:
-			insertData(f, data)
+			insertData(data)
 		case QUERY:
 			streamRecords(conn, data)
 		case SINGLE:
@@ -364,17 +360,18 @@ func check(e error) {
 // index of that record.
 // Then marshals that map back and safely writes the bytes into
 // the current database partitition.
-func insertData(f *os.File, data []byte) {
+func insertData(data []byte) {
 	var d map[string]interface{}
 	if err := json.Unmarshal(data, &d); err != nil {
 		panic(err)
 	}
 
 	var lastOffset int64
-	// Safely access the last offset.
+	// Safely access the last offset and current partition.
 	cs.Lock()
 	l := len(cs.offsets)
 	lastOffset = cs.lastOffset
+	f := cs.partitions[cs.partitionIndex]
 
 	// TODO: Replace this with a substructure that serves as a metadata field.
 	// Set "id" field to the index of the record.
