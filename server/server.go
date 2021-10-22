@@ -31,6 +31,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
@@ -112,6 +114,9 @@ type ConcurrentSlice struct {
 	partitionIndex int64
 }
 
+// Global file watcher
+var watcher *fsnotify.Watcher
+
 func init() {
 	// Clean up the database files.
 	removeDatabaseFiles()
@@ -124,6 +129,11 @@ func init() {
 	// Trigger partitioning check for every second.
 	ticker := time.NewTicker(1 * time.Second)
 	go periodicPartitioner(ticker)
+
+	// Initiate the global watcher
+	var err error
+	watcher, err = fsnotify.NewWatcher()
+	check(err)
 }
 
 func main() {
@@ -147,6 +157,7 @@ func main() {
 	go func() {
 		<-c
 		quitConnections()
+		watcher.Close()
 		removeDatabaseFiles()
 		os.Exit(1)
 	}()
@@ -173,6 +184,10 @@ func newPartition() *os.File {
 	cs.partitions = append(cs.partitions, f)
 	cs.lastOffset = 0
 	cs.Unlock()
+
+	err = watcher.Add(f.Name())
+	check(err)
+
 	return f
 }
 
@@ -220,6 +235,8 @@ func periodicPartitioner(ticker *time.Ticker) {
 				// We've created the third partition, so discard the first one.
 				discarded := cs.partitions[cs.partitionIndex-2]
 				discarded.Close()
+				err = watcher.Remove(discarded.Name())
+				check(err)
 				os.Remove(discarded.Name())
 			}
 			cs.Unlock()
@@ -297,11 +314,6 @@ func handleConnection(conn net.Conn) {
 
 	// Log the disconnect
 	log.Println("Client at " + remoteAddr + " disconnected.")
-
-	// In case of an INSERT mode client is disconnected, clean up the database files.
-	if mode == INSERT {
-		removeDatabaseFiles()
-	}
 }
 
 // quitConnections quits all of the active TCP connections. It's only called
@@ -496,7 +508,21 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	var partitionStartIndex int64 = -1
 
 	for {
-		time.Sleep(10 * time.Millisecond)
+		// Block until a partition is modified
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Op&fsnotify.Write != fsnotify.Write {
+				continue
+			}
+		case errW, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			check(errW)
+		}
 
 		err = connCheck(conn)
 		if err != nil {
