@@ -497,8 +497,15 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	for {
 		time.Sleep(10 * time.Millisecond)
 
+		// f is the current partition we're reading the data from.
+		var f *os.File
+
 		err = connCheck(conn)
 		if err != nil {
+			// Connection was closed by the peer, close the current partition.
+			if f != nil {
+				f.Close()
+			}
 			return
 		}
 
@@ -508,8 +515,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		subPartitionRefs := cs.partitionRefs[leftOff:]
 		cs.RUnlock()
 
-		// f is the current partition we're reading the data from.
-		var f *os.File
+		// Iterate through the next part of the offsets
 		for i, offset := range subOffsets {
 			leftOff++
 
