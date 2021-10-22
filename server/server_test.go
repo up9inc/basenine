@@ -64,7 +64,7 @@ func TestServerInsertAndReadData(t *testing.T) {
 	for index := 0; index < 100; index++ {
 		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 
-		insertData(f, []byte(payload))
+		insertData([]byte(payload))
 
 		// Safely acces the offsets and partition references
 		n, rf, err := getOffsetAndPartition(index)
@@ -145,7 +145,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 	assert.NotNil(t, f)
 
 	for index := 0; index < 100; index++ {
-		insertData(f, []byte(payload))
+		insertData([]byte(payload))
 	}
 
 	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
@@ -206,7 +206,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 	assert.NotNil(t, f)
 
 	for index := 0; index < 100; index++ {
-		insertData(f, []byte(payload))
+		insertData([]byte(payload))
 	}
 
 	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
@@ -334,7 +334,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	go handleConnection(server)
 
 	for index := 0; index < 100; index++ {
-		insertData(f, []byte(payload))
+		insertData([]byte(payload))
 	}
 
 	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
