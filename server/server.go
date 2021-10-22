@@ -370,11 +370,10 @@ func insertData(f *os.File, data []byte) {
 	}
 
 	var lastOffset int64
-	// Safely access the last offset
-	cs.RLock()
+	// Safely access the last offset.
+	cs.Lock()
 	l := len(cs.offsets)
 	lastOffset = cs.lastOffset
-	cs.RUnlock()
 
 	// TODO: Replace this with a substructure that serves as a metadata field.
 	// Set "id" field to the index of the record.
@@ -387,6 +386,14 @@ func insertData(f *os.File, data []byte) {
 	var length int64 = int64(len(data))
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(length))
+
+	// Safely update the offsets and paritition references.
+	cs.offsets = append(cs.offsets, lastOffset)
+	cs.partitionRefs = append(cs.partitionRefs, cs.partitionIndex)
+	cs.lastOffset = lastOffset + 8 + length
+
+	// Release the lock
+	cs.Unlock()
 
 	// Prepend the length into the data.
 	data = append(b, data...)
@@ -401,13 +408,6 @@ func insertData(f *os.File, data []byte) {
 		// Log the amount of bytes that are written into the database.
 		log.Printf("Wrote %d bytes to the partition: %s\n", n, f.Name())
 	}
-
-	// Safely update the offsets and paritition references.
-	cs.Lock()
-	cs.offsets = append(cs.offsets, lastOffset)
-	cs.partitionRefs = append(cs.partitionRefs, cs.partitionIndex)
-	cs.lastOffset = lastOffset + 8 + length
-	cs.Unlock()
 }
 
 // readRecord reads the record from the database paritition provided by argument f
