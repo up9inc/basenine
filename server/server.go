@@ -121,7 +121,9 @@ func init() {
 		partitionIndex: -1,
 	}
 
-	go periodicPartitioner()
+	// Trigger partitioning check for every second.
+	ticker := time.NewTicker(1 * time.Second)
+	go periodicPartitioner(ticker)
 }
 
 // Main method that the program enters into
@@ -187,10 +189,11 @@ func removeDatabaseFiles() {
 // periodicPartitioner is a Goroutine that handles database parititioning according
 // to the database size limit that's set by /limit command.
 // Triggered every second.
-func periodicPartitioner() {
+func periodicPartitioner(ticker *time.Ticker) {
 	var f *os.File
 	for {
-		time.Sleep(1 * time.Second)
+		<-ticker.C
+
 		if dbSizeLimit == 0 {
 			continue
 		}
