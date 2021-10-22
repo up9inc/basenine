@@ -457,7 +457,7 @@ func readRecord(f *os.File, seek int64) (b []byte, n int64, err error) {
 // POSIX compliant method for checking whether connection was closed by the peer or not
 func connCheck(conn net.Conn) error {
 	var sysErr error = nil
-	// Not easily testable through unit tests. net.Pipe() cannot be used.
+	// Not easily testable through unit tests. net.Pipe() cannot be used directly.
 	switch conn.(type) {
 	case syscall.Conn:
 		rc, err := conn.(syscall.Conn).SyscallConn()
@@ -479,6 +479,12 @@ func connCheck(conn net.Conn) error {
 		})
 		if err != nil {
 			return err
+		}
+	default:
+		// Workaround for detecting close for net.Pipe()
+		err := conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		if err == io.ErrClosedPipe {
+			sysErr = err
 		}
 	}
 	return sysErr
