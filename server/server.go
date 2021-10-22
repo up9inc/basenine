@@ -121,7 +121,6 @@ func init() {
 		partitionIndex: -1,
 	}
 
-	go periodicFileSyncer()
 	go periodicPartitioner()
 }
 
@@ -224,28 +223,6 @@ func periodicPartitioner() {
 			cs.Unlock()
 			check(err)
 		}
-	}
-}
-
-// periodicFileSyncer is a Goroutine that handles
-// commiting the current contents of the file (partition) to stable storage
-// by calling f.Sync() every 10 milliseconds.
-func periodicFileSyncer() {
-	var f *os.File
-	for {
-		time.Sleep(10 * time.Millisecond)
-
-		// Safely access the current partition index and get the current partition
-		cs.RLock()
-		if cs.partitionIndex == -1 {
-			cs.RUnlock()
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		f = cs.partitions[cs.partitionIndex]
-		cs.RUnlock()
-
-		f.Sync()
 	}
 }
 
