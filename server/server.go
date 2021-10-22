@@ -628,6 +628,7 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	f.Seek(n, io.SeekStart)
 	var b []byte
 	b, n, err = readRecord(f, n)
+	f.Close()
 	conn.Write([]byte(fmt.Sprintf("%s\n", b)))
 	return
 }
