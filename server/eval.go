@@ -326,6 +326,16 @@ func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
 		return
 	}
 
+	// Evaluate `false and`, `true or` fast
+	unarBool := boolOperand(unar)
+	if logic.Op == "and" && !unarBool {
+		v = false
+		return
+	} else if logic.Op == "or" && unarBool {
+		v = true
+		return
+	}
+
 	var next interface{}
 	if logic.Next != nil {
 		next, err = evalLogical(logic.Next, obj)
