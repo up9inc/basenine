@@ -1,4 +1,4 @@
-module main
+module github.com/up9inc/basenine/client/go
 
 go 1.16
 
