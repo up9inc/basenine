@@ -18,7 +18,7 @@ Schema-free, document-oriented streaming database that optimized for monitoring 
 
 Run the server:
 
-`make && build/basenine -port 9099`
+`make && ./basenine -port 9099`
 
 The database server has three modes:
 

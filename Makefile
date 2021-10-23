@@ -1,5 +1,8 @@
-default:
-	cd server/ && go build -gcflags="-e" -o ../build/basenine *.go
+basenine:
+	cd server/ && go build -gcflags="-e" -o ../basenine *.go
 
-test:
+test: basenine test-client-go
 	cd server/ && go test *.go -v
+
+test-client-go:
+	test/client_go.sh
