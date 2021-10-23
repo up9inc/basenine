@@ -1,0 +1,4 @@
+- [] Turn integer `id` field to a struct that has the ID value as well, change the key to `basenineMetadata`
+- [] Write a client library for Python
+- [] Implement mechanisms to reduce data redundancy
+- [] Improve the querying speed by tracking checksums of strings
