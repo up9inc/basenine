@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -83,11 +84,19 @@ func TestQuery(t *testing.T) {
 		index := 0
 		for {
 			bytes := <-data
-			text := string(bytes)
 
-			expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+			var d map[string]interface{}
+			err = json.Unmarshal(bytes, &d)
+			assert.Nil(t, err)
+
+			delete(d, "id")
+
+			ret, err := json.Marshal(d)
+			assert.Nil(t, err)
+			text := string(ret)
+
 			index++
-			assert.Equal(t, expected, text)
+			assert.Equal(t, `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`, text)
 
 			if index > 14000 {
 				c.Close()

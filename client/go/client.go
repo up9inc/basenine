@@ -151,7 +151,10 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 				break
 			}
 
-			data <- bytes
+			b := make([]byte, len(bytes))
+			copy(b, bytes)
+
+			data <- b
 
 			if !ok {
 				log.Println("Reached EOF on server connection.")
