@@ -167,7 +167,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 				index++
-				assert.Equal(t, expected, string(text))
+				assert.Equal(t, expected, text)
 
 				if index > 99 {
 					return
@@ -228,7 +228,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 				text := scanner.Text()
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
-				assert.Equal(t, expected, string(text))
+				assert.Equal(t, expected, text)
 
 				assert.True(t, ok)
 				return
@@ -286,7 +286,7 @@ func TestServerProtocolValidateMode(t *testing.T) {
 					ok := scanner.Scan()
 					text := scanner.Text()
 
-					assert.Equal(t, row.response, string(text))
+					assert.Equal(t, row.response, text)
 
 					assert.True(t, ok)
 					return
@@ -360,7 +360,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 				index++
-				assert.Equal(t, expected, string(text))
+				assert.Equal(t, expected, text)
 
 				if index > 99 {
 					return

@@ -591,6 +591,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
 				if err != nil {
 					log.Printf("Write error: %v\n", err)
+					break
 				}
 			}
 		}

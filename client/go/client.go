@@ -36,25 +36,23 @@ func (c *Connection) InsertMode() {
 	c.SendText("/insert")
 }
 
-func (c *Connection) Query(query string, data chan string) {
+func (c *Connection) Query(query string, data chan []byte) {
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, data)
 	wg.Add(1)
 
 	c.SendText("/query")
 	c.SendText(fmt.Sprintf("%s", query))
-
-	wg.Wait()
 }
 
-func Single(host string, port string, id int) (data string, err error) {
+func Single(host string, port string, id int) (data []byte, err error) {
 	var c *Connection
 	c, err = NewConnection(host, port)
 	if err != nil {
 		return
 	}
 
-	ret := make(chan string)
+	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, ret)
@@ -74,7 +72,7 @@ func Validate(host string, port string, query string) (err error) {
 		return
 	}
 
-	ret := make(chan string)
+	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, ret)
@@ -84,8 +82,9 @@ func Validate(host string, port string, query string) (err error) {
 	c.SendText(fmt.Sprintf("%s", query))
 
 	data := <-ret
-	if data != "OK" {
-		err = errors.New(data)
+	text := string(data)
+	if text != "OK" {
+		err = errors.New(text)
 	}
 	return
 }
@@ -97,7 +96,7 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 		return
 	}
 
-	ret := make(chan string)
+	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, ret)
@@ -107,8 +106,9 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 	c.SendText(fmt.Sprintf("%s~%s", macro, expanded))
 
 	data := <-ret
-	if data != "OK" {
-		err = errors.New(data)
+	text := string(data)
+	if text != "OK" {
+		err = errors.New(text)
 	}
 	return
 }
@@ -120,7 +120,7 @@ func Limit(host string, port string, limit int64) (err error) {
 		return
 	}
 
-	ret := make(chan string)
+	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, ret)
@@ -130,27 +130,28 @@ func Limit(host string, port string, limit int64) (err error) {
 	c.SendText(fmt.Sprintf("%d", limit))
 
 	data := <-ret
-	if data != "OK" {
-		err = errors.New(data)
+	text := string(data)
+	if text != "OK" {
+		err = errors.New(text)
 	}
 	return
 }
 
-func readConnection(wg *sync.WaitGroup, c *Connection, ret chan string) {
+func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 	defer wg.Done()
 	for {
 		scanner := bufio.NewScanner(c)
 
 		for {
 			ok := scanner.Scan()
-			text := scanner.Text()
+			bytes := scanner.Bytes()
 
-			command := handleCommands(text)
+			command := handleCommands(bytes)
 			if command {
 				break
 			}
 
-			ret <- text
+			data <- bytes
 
 			if !ok {
 				log.Println("Reached EOF on server connection.")
@@ -160,8 +161,9 @@ func readConnection(wg *sync.WaitGroup, c *Connection, ret chan string) {
 	}
 }
 
-func handleCommands(text string) bool {
+func handleCommands(bytes []byte) bool {
 	r, err := regexp.Compile("^%.*%$")
+	text := string(bytes)
 	if err == nil {
 		if r.MatchString(text) {
 
