@@ -4,7 +4,7 @@
 //
 // This is the client library for Basenine databse server.
 //
-package main
+package basenine
 
 import (
 	"bufio"
