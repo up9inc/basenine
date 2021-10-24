@@ -4,7 +4,7 @@ Schema-free, document-oriented streaming database that optimized for monitoring 
 
 ### Featured Aspects
 
-- Has a fast write speed.
+- Has the fastest possible write speed.
 - Has a read speed that scales linearly.
 - Schema-free.
 - Only allows create and read.
@@ -44,7 +44,7 @@ So the actual effective limit is the half of this value.
 
 ### Query
 
-Querying achieved through a filter syntax named Basenine Filter Language (BFL). It enables the user to query the traffic logs efficiently and precisely.
+Querying achieved through a filter syntax named **Basenine Filter Language (BFL)**. It enables the user to query the traffic logs efficiently and precisely.
 
 ```python
 http and request.method == "GET" and request.path != "/example" and (request.query.a > 42 or request.headers["x"] == "y")
