@@ -36,8 +36,12 @@ import (
 )
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
-var port = flag.Int("port", 9099, "The port to listen on; default is 9099.")
-var debug = flag.Bool("debug", false, "Enable debug logs")
+var port = flag.Int("port", 9099, "The port to listen on.")
+var debug = flag.Bool("debug", false, "Enable debug logs.")
+var version = flag.Bool("version", false, "Print version and exit.")
+
+// Version of the software.
+const VERSION string = "0.1.0"
 
 type ConnectionMode int
 
@@ -139,6 +143,12 @@ func init() {
 func main() {
 	// Parse the command-line arguments.
 	flag.Parse()
+
+	// Print version and exit.
+	if *version {
+		fmt.Printf("%s\n", VERSION)
+		os.Exit(0)
+	}
 
 	log.Println("Starting server...")
 
