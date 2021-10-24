@@ -66,6 +66,9 @@ func TestValidate(t *testing.T) {
 	err := Validate(HOST, PORT, `brand.name == "Chevrolet"`)
 	assert.Nil(t, err)
 
+	err = Validate(HOST, PORT, `http and request.method == "GET" and request.path != "/example" and (request.query.a > 42 or request.headers["x"] == "y")`)
+	assert.Nil(t, err)
+
 	err = Validate(HOST, PORT, `=.=`)
 	assert.EqualError(t, err, `1:1: unexpected token "="`)
 
