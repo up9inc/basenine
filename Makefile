@@ -5,6 +5,9 @@ SUFFIX=$(GOOS)_$(GOARCH)
 basenine:
 	cd server/ && go build -gcflags="-e" -o ../basenine *.go
 
+install: basenine
+	mv basenine /usr/local/bin/
+
 test: basenine test-client-go
 	cd server/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
 
