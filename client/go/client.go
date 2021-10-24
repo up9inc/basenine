@@ -2,7 +2,7 @@
 // Use of this source code is governed by Apache License 2.0
 // license that can be found in the LICENSE file.
 //
-// This is the client library for Basenine databse server.
+// This is the client library for Basenine database server.
 //
 package basenine
 
@@ -57,7 +57,7 @@ func (c *Connection) Query(query string, data chan []byte) {
 	wg.Add(1)
 
 	c.SendText("/query")
-	c.SendText(fmt.Sprintf("%s", query))
+	c.SendText(query)
 }
 
 // Single returns a single record from the database server specified by the host:port pair
