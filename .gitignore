@@ -23,5 +23,6 @@
 # Ignore the scripts that are created for development
 *dev.*
 
-# Binary
+# Build
+build/
 basenine
