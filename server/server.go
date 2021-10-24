@@ -385,7 +385,7 @@ func check(e error) {
 func insertData(data []byte) {
 	var d map[string]interface{}
 	if err := json.Unmarshal(data, &d); err != nil {
-		panic(err)
+		return
 	}
 
 	var lastOffset int64

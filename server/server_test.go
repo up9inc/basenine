@@ -110,6 +110,10 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	client.Write([]byte(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`))
 	client.Write([]byte("\n"))
 
+	// Case for non-JSON payload
+	client.Write([]byte(`hello world`))
+	client.Write([]byte("\n"))
+
 	time.Sleep(500 * time.Millisecond)
 
 	index := 0
