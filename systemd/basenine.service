@@ -1,0 +1,13 @@
+[Unit]
+Description=Setup Basenine
+After=network.target
+
+[Service]
+RuntimeDirectory=basenine
+WorkingDirectory=/var/run/basenine
+ExecStart=/usr/local/bin/basenine
+Restart=always
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
