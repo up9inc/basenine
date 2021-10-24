@@ -167,6 +167,9 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 	defer wg.Done()
 	for {
 		scanner := bufio.NewScanner(c)
+		// Prevent buffer overflows
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 209715200)
 
 		for {
 			ok := scanner.Scan()
