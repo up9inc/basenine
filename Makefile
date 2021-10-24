@@ -8,7 +8,10 @@ basenine:
 install: basenine
 	mv basenine /usr/local/bin/
 
-test: basenine test-client-go
+clean:
+	rm basenine
+
+test: clean basenine test-client-go
 	cd server/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
 	$(MAKE) coverage
 
