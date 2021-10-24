@@ -125,7 +125,7 @@ Validate:
 ```go
 err := Validate("localhost", "9099", `brand.name == "Chevrolet"`)
 if err != nil {
-    // err should be nil, othwersie a connection error or a syntax error
+    // err should be nil, otherwise a connection error or a syntax error
 }
 ```
 
