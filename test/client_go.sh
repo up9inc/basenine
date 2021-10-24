@@ -2,7 +2,7 @@
 
 ./basenine & \
 PID=$! && \
-cd client/go/ && go test *.go -v
+cd client/go/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
 EXIT_CODE=$?
 
 kill -2 $PID

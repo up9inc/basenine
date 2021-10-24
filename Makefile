@@ -6,7 +6,7 @@ basenine:
 	cd server/ && go build -gcflags="-e" -o ../basenine *.go
 
 test: basenine test-client-go
-	cd server/ && go test *.go -v
+	cd server/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
 
 test-client-go:
 	test/client_go.sh
