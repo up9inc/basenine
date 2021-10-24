@@ -209,7 +209,7 @@ func evalCallExpression(call *CallExpression, obj interface{}) (v interface{}, e
 }
 
 // Evaluates boolean, integer, float, string literals and call, sub-, select expressions.
-func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
+func evalPrimary(pri *Primary, obj interface{}) (v interface{}, collapse bool, err error) {
 	if pri.Bool != nil {
 		// `true`, `false` goes here
 		v = *pri.Bool
@@ -223,7 +223,16 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 		// `request.path` goes here
 		result := pri.JsonPath.Get(obj)
 		if len(result) < 1 {
-			v = false
+			if pri.Helper == nil {
+				// Collapse if JSONPath couldn't be found in the JSON document
+				// and it's not a helper method call.
+				// collapse = true means the whole expression will be
+				// evaluated to false.
+				collapse = true
+				return
+			} else {
+				v = false
+			}
 		} else {
 			v = result[0]
 		}
@@ -252,10 +261,10 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, err error) {
 }
 
 // Evaluates unary expressions like `!`, `-`
-func evalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
+func evalUnary(unar *Unary, obj interface{}) (v interface{}, collapse bool, err error) {
 	if unar.Unary != nil {
-		v, err = evalUnary(unar.Unary, obj)
-		if err != nil {
+		v, collapse, err = evalUnary(unar.Unary, obj)
+		if err != nil || collapse {
 			return
 		}
 		switch v.(type) {
@@ -269,23 +278,24 @@ func evalUnary(unar *Unary, obj interface{}) (v interface{}, err error) {
 			}
 		}
 	} else {
-		v, err = evalPrimary(unar.Primary, obj)
+		v, collapse, err = evalPrimary(unar.Primary, obj)
 	}
 
 	return
 }
 
 // Evaluates comparison expressions like `>=`, `>`, `<=`, `<`
-func evalComparison(comp *Comparison, obj interface{}) (v interface{}, err error) {
-	logic, err := evalUnary(comp.Unary, obj)
-	if err != nil {
+func evalComparison(comp *Comparison, obj interface{}) (v interface{}, collapse bool, err error) {
+	var logic interface{}
+	logic, collapse, err = evalUnary(comp.Unary, obj)
+	if err != nil || collapse {
 		return
 	}
 
 	var next interface{}
 	if comp.Next != nil {
-		next, err = evalComparison(comp.Next, obj)
-		if err != nil {
+		next, collapse, err = evalComparison(comp.Next, obj)
+		if err != nil || collapse {
 			return
 		}
 		v = comparisonOperations[comp.Op].(func(interface{}, interface{}) bool)(logic, next)
@@ -298,16 +308,17 @@ func evalComparison(comp *Comparison, obj interface{}) (v interface{}, err error
 }
 
 // Evaluates equality expressions like `!=`, `==`
-func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
-	comp, err := evalComparison(equ.Comparison, obj)
-	if err != nil {
+func evalEquality(equ *Equality, obj interface{}) (v interface{}, collapse bool, err error) {
+	var comp interface{}
+	comp, collapse, err = evalComparison(equ.Comparison, obj)
+	if err != nil || collapse {
 		return
 	}
 
 	var next interface{}
 	if equ.Next != nil {
-		next, err = evalEquality(equ.Next, obj)
-		if err != nil {
+		next, collapse, err = evalEquality(equ.Next, obj)
+		if err != nil || collapse {
 			return
 		}
 		v = equalityOperations[equ.Op].(func(interface{}, interface{}) bool)(comp, next)
@@ -320,9 +331,10 @@ func evalEquality(equ *Equality, obj interface{}) (v interface{}, err error) {
 }
 
 // Evaluates logical expressions like `and`, `or`
-func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
-	unar, err := evalEquality(logic.Equality, obj)
-	if err != nil {
+func evalLogical(logic *Logical, obj interface{}) (v interface{}, collapse bool, err error) {
+	var unar interface{}
+	unar, collapse, err = evalEquality(logic.Equality, obj)
+	if err != nil || collapse {
 		return
 	}
 
@@ -338,8 +350,8 @@ func evalLogical(logic *Logical, obj interface{}) (v interface{}, err error) {
 
 	var next interface{}
 	if logic.Next != nil {
-		next, err = evalLogical(logic.Next, obj)
-		if err != nil {
+		next, collapse, err = evalLogical(logic.Next, obj)
+		if err != nil || collapse {
 			return
 		}
 		v = logicalOperations[logic.Op].(func(interface{}, interface{}) bool)(unar, next)
@@ -357,7 +369,11 @@ func evalExpression(expr *Expression, obj interface{}) (v interface{}, err error
 		v = true
 		return
 	}
-	v, err = evalLogical(expr.Logical, obj)
+	var collapse bool
+	v, collapse, err = evalLogical(expr.Logical, obj)
+	if collapse {
+		v = false
+	}
 	return
 }
 
