@@ -1,5 +1,20 @@
 # Basenine
 
+<p align="center">
+    <a href="https://github.com/up9inc/basenine/releases/latest">
+        <img alt="GitHub Latest Release" src="https://img.shields.io/github/v/release/up9inc/basenine?logo=GitHub&style=flat-square">
+    </a>
+    <a href="https://github.com/up9inc/basenine/blob/master/LICENSE">
+        <img alt="GitHub License" src="https://img.shields.io/github/license/up9inc/basenine?logo=GitHub&style=flat-square">
+    </a>
+    <a href="https://github.com/up9inc/basenine/actions?query=workflow%3ATest">
+        <img alt="GitHub Workflow Tests" src="https://img.shields.io/github/workflow/status/up9inc/basenine/Test?logo=GitHub&label=tests&style=flat-square">
+    </a>
+    <a href="https://codecov.io/gh/up9inc/basenine">
+        <img alt="Code Coverage (Codecov)" src="https://img.shields.io/codecov/c/github/up9inc/basenine?logo=Codecov&style=flat-square">
+    </a>
+</p>
+
 Schema-free, document-oriented streaming database that optimized for monitoring network traffic in real-time.
 
 ### Featured Aspects
