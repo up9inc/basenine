@@ -304,11 +304,6 @@ func handleConnection(conn net.Conn) {
 
 	// Log the disconnect
 	log.Println("Client at " + remoteAddr + " disconnected.")
-
-	// In case of an INSERT mode client is disconnected, clean up the database files.
-	if mode == INSERT {
-		removeDatabaseFiles()
-	}
 }
 
 // quitConnections quits all of the active TCP connections. It's only called
