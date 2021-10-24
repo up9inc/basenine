@@ -10,6 +10,7 @@ install: basenine
 
 test: basenine test-client-go
 	cd server/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
+	$(MAKE) coverage
 
 test-client-go:
 	test/client_go.sh
@@ -25,3 +26,6 @@ build-all:
 	$(MAKE) build GOOS=linux GOARCH=386
 	$(MAKE) build GOOS=darwin GOARCH=amd64
 	$(MAKE) build GOOS=darwin GOARCH=arm64
+
+coverage:
+	cp server/coverage.out coverage.out && sed 1,1d client/go/coverage.out >> coverage.out

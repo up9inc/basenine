@@ -23,3 +23,9 @@ jobs:
 
     - name: Test
       run: make test
+
+    - name: Combine the coverage
+      run: make coverage
+
+    - name: Upload coverage to Codecov
+      run: bash <(curl -s https://codecov.io/bash)
