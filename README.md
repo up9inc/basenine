@@ -25,7 +25,7 @@ Schema-free, document-oriented streaming database that optimized for monitoring 
 - Only allows create and read.
 - Accepts JSON as the record format.
 - Let's you query based on JSONPath.
-- Has a rich filtering sytnax for querying.
+- Has a rich filtering syntax for querying.
 - Defines a TCP-based protocol.
 - Has long lasting TCP connections.
 - Watches the database and streams back the new records.
