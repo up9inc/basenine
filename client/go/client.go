@@ -17,6 +17,12 @@ import (
 	"time"
 )
 
+// Closing indicators
+const (
+	CloseChannel    = "%close%"
+	CloseConnection = "%quit%"
+)
+
 // Connection is the struct that holds the TCP connection reference.
 type Connection struct {
 	net.Conn
@@ -180,7 +186,7 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 
 			if !ok {
 				log.Println("Reached EOF on server connection.")
-				break
+				return
 			}
 
 			bytes := scanner.Bytes()
@@ -208,8 +214,8 @@ func handleCommands(bytes []byte) bool {
 		if r.MatchString(text) {
 
 			switch {
-			case text == "%quit%":
-				log.Println("\b\bServer is leaving. Hanging up.")
+			case text == CloseConnection:
+				log.Println("Server is leaving. Hanging up.")
 			}
 
 			return true
