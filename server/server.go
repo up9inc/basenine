@@ -522,7 +522,10 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 	// Parse the query.
 	expr, err := Parse(query)
-	check(err)
+	if err != nil {
+		log.Printf("Syntax error: %v\n", err)
+		conn.Close()
+	}
 
 	// Do compile-time evaluations.
 	err = Precompute(expr)
