@@ -242,7 +242,13 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, collapse bool, e
 			var params []interface{}
 			params, err = evalParameters(pri.CallExpression.Parameters, obj)
 			params = append([]interface{}{v}, params...)
-			v = helpers[*pri.Helper].(func(args ...interface{}) interface{})(params...)
+			if helper, ok := helpers[*pri.Helper]; ok {
+				v = helper.(func(args ...interface{}) interface{})(params...)
+			} else {
+				// Collapse if an undefined helper is invoked
+				collapse = true
+				return
+			}
 		}
 	} else if pri.Regexp != nil {
 		// `r"Chev.*"` goes here
