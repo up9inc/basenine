@@ -79,6 +79,7 @@ func Single(host string, port string, id int) (data []byte, err error) {
 	c.SendText(fmt.Sprintf("%d", id))
 
 	data = <-ret
+	c.Close()
 	return
 }
 
@@ -105,6 +106,7 @@ func Validate(host string, port string, query string) (err error) {
 	if text != "OK" {
 		err = errors.New(text)
 	}
+	c.Close()
 	return
 }
 
@@ -131,6 +133,7 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 	if text != "OK" {
 		err = errors.New(text)
 	}
+	c.Close()
 	return
 }
 
@@ -158,6 +161,7 @@ func Limit(host string, port string, limit int64) (err error) {
 	if text != "OK" {
 		err = errors.New(text)
 	}
+	c.Close()
 	return
 }
 
