@@ -140,12 +140,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	log.Println("Starting server...")
-
 	// Start listenning to given address and port.
 	src := *addr + ":" + strconv.Itoa(*port)
-	listener, _ := net.Listen("tcp", src)
-	log.Printf("Listening on %s.\n", src)
+	listener, err := net.Listen("tcp", src)
+	check(err)
+	log.Printf("Listening on %s\n", src)
 
 	defer listener.Close()
 
