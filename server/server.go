@@ -489,6 +489,25 @@ func connCheck(conn net.Conn) error {
 	return sysErr
 }
 
+// Blocks until a partition is modified
+func watchPartitions() (err error) {
+	select {
+	case event, ok := <-watcher.Events:
+		if !ok {
+			return
+		}
+		if event.Op&fsnotify.Write != fsnotify.Write {
+			return
+		}
+	case errW, ok := <-watcher.Errors:
+		if !ok {
+			err = errW
+			return
+		}
+	}
+	return
+}
+
 // streamRecords is an infinite loop that only called in case of QUERY TCP connection mode.
 // It expands marcros, parses the given query, does compile-time evaluations with Precompute() call
 // and filters out the records according to query.
@@ -513,22 +532,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	var leftOff int64 = 0
 
 	for {
-		// Block until a partition is modified
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			if event.Op&fsnotify.Write != fsnotify.Write {
-				continue
-			}
-		case errW, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			check(errW)
-		}
-
 		// f is the current partition we're reading the data from.
 		var f *os.File
 
@@ -604,6 +607,9 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				}
 			}
 		}
+
+		// Block until a partition is modified
+		watchPartitions()
 	}
 }
 
