@@ -130,13 +130,14 @@ func init() {
 		partitionIndex: -1,
 	}
 
+	// Trigger partitioning check for every second.
+	ticker := time.NewTicker(1 * time.Second)
+	go periodicPartitioner(ticker)
+
 	// Initiate the global watcher
 	var err error
 	watcher, err = fsnotify.NewWatcher()
 	check(err)
-
-	// Trigger partitioning check upon writes to database.
-	go partitioner()
 }
 
 func main() {
@@ -208,13 +209,13 @@ func removeDatabaseFiles() {
 	}
 }
 
-// partitioner is a Goroutine that handles database parititioning according
+// periodicPartitioner is a Goroutine that handles database parititioning according
 // to the database size limit that's set by /limit command.
 // Triggered every second.
-func partitioner() {
+func periodicPartitioner(ticker *time.Ticker) {
 	var f *os.File
 	for {
-		watchPartitions()
+		<-ticker.C
 
 		if dbSizeLimit == 0 {
 			continue
