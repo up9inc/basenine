@@ -34,7 +34,7 @@ coverage:
 	cp server/coverage.out coverage.out && sed 1,1d client/go/coverage.out >> coverage.out
 
 install-init-systemd:
-	cp scripts/init/basenine.service /etc/systemd/system/ && \
+	cp scripts/init/systemd/basenine.service /etc/systemd/system/ && \
 	systemctl daemon-reload && \
 	systemctl restart basenine && \
 	systemctl status basenine
