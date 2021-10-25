@@ -173,6 +173,12 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 
 		for {
 			ok := scanner.Scan()
+
+			if !ok {
+				log.Println("Reached EOF on server connection.")
+				break
+			}
+
 			bytes := scanner.Bytes()
 
 			command := handleCommands(bytes)
@@ -184,11 +190,6 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 			copy(b, bytes)
 
 			data <- b
-
-			if !ok {
-				log.Println("Reached EOF on server connection.")
-				break
-			}
 		}
 	}
 }
