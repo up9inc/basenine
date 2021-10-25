@@ -19,7 +19,7 @@ test-client-go:
 	test/client_go.sh
 
 build:
-	cd server/ && go build -gcflags="-e" -o ../build/basenine_$(SUFFIX) *.go && \
+	cd server/ && CGO_ENABLED=0 go build -gcflags="-e" -o ../build/basenine_$(SUFFIX) *.go && \
 	cd ../build/ && shasum -a 256 basenine_${SUFFIX} > basenine_${SUFFIX}.sha256
 
 build-all:
