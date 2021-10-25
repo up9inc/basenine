@@ -39,7 +39,7 @@ var debug = flag.Bool("debug", false, "Enable debug logs.")
 var version = flag.Bool("version", false, "Print version and exit.")
 
 // Version of the software.
-const VERSION string = "0.1.0"
+const VERSION string = "0.1.1"
 
 type ConnectionMode int
 
