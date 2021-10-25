@@ -165,7 +165,8 @@ func datetime(args ...interface{}) interface{} {
 	if err != nil {
 		return false
 	} else {
-		timestamp := t.Unix()
+		// Timestamp is an integer like 1635190131000
+		timestamp := t.UnixNano() / int64(time.Millisecond)
 		return timestamp
 	}
 }
