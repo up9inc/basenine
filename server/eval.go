@@ -398,6 +398,6 @@ func Eval(expr *Expression, json string) (truth bool, err error) {
 	}
 
 	v, err := evalExpression(expr, obj)
-	truth = v.(bool)
+	truth = boolOperand(v)
 	return
 }
