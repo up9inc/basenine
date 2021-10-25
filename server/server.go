@@ -670,7 +670,10 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 // any syntax errors or not.
 func validateQuery(conn net.Conn, data []byte) {
 	query := string(data)
-	_, err := Parse(query)
+	// Expand all macros in the query, if there are any.
+	query, err := expandMacros(query)
+	check(err)
+	_, err = Parse(query)
 
 	if err == nil {
 		conn.Write([]byte(fmt.Sprintf("OK\n")))
