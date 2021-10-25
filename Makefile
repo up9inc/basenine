@@ -38,3 +38,9 @@ install-init-systemd:
 	systemctl daemon-reload && \
 	systemctl restart basenine && \
 	systemctl status basenine
+
+install-init-rc:
+	cp scripts/init/rc/basenine /etc/init.d/basenine && \
+	rc-update add basenine boot && \
+	rc-service basenine start && \
+	rc-service basenine status

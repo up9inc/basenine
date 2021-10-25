@@ -1,0 +1,7 @@
+#!/sbin/openrc-run
+
+# Move this file into /etc/init.d/basenine
+# To add Basenine service at boot time, run:
+#   rc-update add basenine boot
+
+command=/usr/local/bin/basenine
