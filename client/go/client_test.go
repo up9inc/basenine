@@ -110,7 +110,6 @@ func TestQuery(t *testing.T) {
 	}
 
 	handleMetaChannel := func(wg *sync.WaitGroup, c *Connection, meta chan []byte) {
-		defer wg.Done()
 		index := 0
 		for {
 			bytes := <-meta
@@ -129,7 +128,7 @@ func TestQuery(t *testing.T) {
 	var wg sync.WaitGroup
 	go handleDataChannel(&wg, c, data)
 	go handleMetaChannel(&wg, c, meta)
-	wg.Add(2)
+	wg.Add(1)
 
 	c.Query(`chevy`, data, meta)
 	assert.Nil(t, err)
