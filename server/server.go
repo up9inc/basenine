@@ -528,8 +528,11 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	}
 
 	// Do compile-time evaluations.
-	err = Precompute(expr)
+	limit, err := Precompute(expr)
 	check(err)
+
+	// Number of written records to the TCP connection.
+	var numberOfWritten uint64 = 0
 
 	// The state to track the last offset's index in cs.offsets
 	var leftOff int64 = 0
@@ -556,6 +559,12 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		// Iterate through the next part of the offsets
 		for i, offset := range subOffsets {
 			leftOff++
+
+			// If the number of written records is greater than or equal to the limit
+			// and if the limit is not zero then stop the stream.
+			if limit != 0 && numberOfWritten >= limit {
+				return
+			}
 
 			// Safely access the *os.File pointer that the current offset refers to.
 			cs.RLock()
@@ -608,6 +617,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 					log.Printf("Write error: %v\n", err)
 					break
 				}
+				numberOfWritten++
 			}
 		}
 

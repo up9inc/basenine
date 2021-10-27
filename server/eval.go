@@ -171,12 +171,19 @@ func datetime(args ...interface{}) interface{} {
 	}
 }
 
+func limit(args ...interface{}) interface{} {
+	// Returns true no matter what. Evaluated compile-time,
+	// limits the number of records returned as a result of the query.
+	return true
+}
+
 // Map of helper methods
 var helpers = map[string]interface{}{
 	"startsWith": startsWith,
 	"endsWith":   endsWith,
 	"contains":   contains,
 	"datetime":   datetime,
+	"limit":      limit,
 }
 
 // Iterates and evaulates each parameter of a given function call
