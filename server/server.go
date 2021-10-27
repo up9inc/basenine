@@ -88,9 +88,6 @@ const (
 const DB_FILE string = "data"
 const DB_FILE_EXT string = "bin"
 
-// Initial value of database size limit. 0 means unlimited size.
-var dbSizeLimit int64 = 0
-
 // Slice that stores the TCP connections
 var connections []net.Conn
 
@@ -110,13 +107,16 @@ var cs ConcurrentSlice
 // partitionIndex is the current index of currently being inserted database partition. Which
 // is a reference to partitions slice's index and it's often times equal to len(partitions).
 // Initial value of partitionIndex should be -1. -1 means there are no partitions yet.
+//
+// partitionSizeLimit is the value of database partition size limit. 0 means unlimited size.
 type ConcurrentSlice struct {
 	sync.RWMutex
-	lastOffset     int64
-	partitionRefs  []int64
-	offsets        []int64
-	partitions     []*os.File
-	partitionIndex int64
+	lastOffset         int64
+	partitionRefs      []int64
+	offsets            []int64
+	partitions         []*os.File
+	partitionIndex     int64
+	partitionSizeLimit int64
 }
 
 // Global file watcher
@@ -230,13 +230,12 @@ func periodicPartitioner(ticker *time.Ticker) {
 	for {
 		<-ticker.C
 
-		if dbSizeLimit == 0 {
-			continue
-		}
+		var partitionSizeLimit int64
 
-		// Safely access the current partition index and get the current partition
+		// Safely access the partition size limit, current partition index and get the current partition
 		cs.RLock()
-		if cs.partitionIndex == -1 {
+		partitionSizeLimit = cs.partitionSizeLimit
+		if partitionSizeLimit == 0 || cs.partitionIndex == -1 {
 			cs.RUnlock()
 			continue
 		}
@@ -246,7 +245,7 @@ func periodicPartitioner(ticker *time.Ticker) {
 		info, err := f.Stat()
 		check(err)
 		currentSize := info.Size()
-		if currentSize > dbSizeLimit {
+		if currentSize > partitionSizeLimit {
 			// If we exceeded the half of the database size limit, create a new partition
 			f = newPartition()
 
@@ -687,7 +686,7 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	// Record can only be removed if the partition of the record
 	// that it belongs to is removed. Therefore a file open error
 	// means the record is removed.
-	// It can only occur if the dbSizeLimit is set to a value
+	// It can only occur if the partitionSizeLimit is set to a value
 	// other than 0
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Record does not exist!\n")))
@@ -747,7 +746,9 @@ func setLimit(conn net.Conn, data []byte) {
 		return
 	}
 
-	dbSizeLimit = int64(value) / 2
+	cs.Lock()
+	cs.partitionSizeLimit = int64(value) / 2
+	cs.Unlock()
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
