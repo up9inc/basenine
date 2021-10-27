@@ -17,6 +17,25 @@ import (
 	"time"
 )
 
+// Metadata field name
+const MetadataFieldName string = "basenineMetadata"
+
+// Metadata info appended into each record
+type Metadata struct {
+	Id              uint64 `json:"id"`
+	Current         uint64 `json:"current"`
+	Total           uint64 `json:"total"`
+	NumberOfWritten uint64 `json:"numberOfWritten"`
+}
+
+// Unmarshal a map to Metadata
+func (m *Metadata) UnmarshalData(metadata map[string]interface{}) {
+	m.Id = uint64(metadata["id"].(float64))
+	m.Current = uint64(metadata["current"].(float64))
+	m.Total = uint64(metadata["Total"].(float64))
+	m.NumberOfWritten = uint64(metadata["numberOfWritten"].(float64))
+}
+
 // Closing indicators
 const (
 	CloseChannel    = "%close%"
