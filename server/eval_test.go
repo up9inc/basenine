@@ -87,6 +87,7 @@ var data = []struct {
 	{`model != nil`, `{"id":114905,"model":null,"brand":{"name":"Chevrolet"},"year":2021}`, false},
 	{`model == nil`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false},
 	{`model != nil`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true},
+	{"something == \"\"hello world\";v=\"42\", \"", `{"something":"\"hello world\";v=\"42\", "}`, true},
 }
 
 func TestEval(t *testing.T) {
