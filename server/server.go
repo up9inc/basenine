@@ -258,6 +258,7 @@ func dumpCore() {
 	cs.Lock()
 	csExport.LastOffset = cs.lastOffset
 	csExport.PartitionRefs = cs.partitionRefs
+	csExport.Offsets = cs.offsets
 	for _, partition := range cs.partitions {
 		csExport.PartitionPaths = append(csExport.PartitionPaths, partition.Name())
 	}
@@ -294,6 +295,7 @@ func restoreCore() {
 
 	cs.lastOffset = csExport.LastOffset
 	cs.partitionRefs = csExport.PartitionRefs
+	cs.offsets = csExport.Offsets
 	for _, partitionPath := range csExport.PartitionPaths {
 		paritition, err := os.OpenFile(partitionPath, os.O_CREATE|os.O_WRONLY, 0644)
 		check(err)
