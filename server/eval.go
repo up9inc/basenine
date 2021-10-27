@@ -261,8 +261,13 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, collapse bool, e
 		// `request.headers["a"]` or `request.path[0]` or `brand["name"].startsWith("Chev")` goes here
 		v, err = evalCallExpression(pri.CallExpression, obj)
 	} else {
-		// Result defaults to `false`
-		v = false
+		if pri.Nil {
+			// `nil` goes here
+			v = nil
+		} else {
+			// Result defaults to `false`
+			v = false
+		}
 	}
 	return
 }
