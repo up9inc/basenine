@@ -134,7 +134,7 @@ func TestQuery(t *testing.T) {
 	c.Query(`chevy`, data, meta)
 	assert.Nil(t, err)
 
-	if waitTimeout(&wg, 1*time.Second) {
+	if waitTimeout(&wg, 2*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	}
 }
