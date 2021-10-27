@@ -300,6 +300,9 @@ func restoreCore() {
 		paritition, err := os.OpenFile(partitionPath, os.O_CREATE|os.O_WRONLY, 0644)
 		check(err)
 		cs.partitions = append(cs.partitions, paritition)
+
+		err = watcher.Add(paritition.Name())
+		check(err)
 	}
 	cs.partitionIndex = csExport.PartitionIndex
 	cs.partitionSizeLimit = csExport.PartitionSizeLimit

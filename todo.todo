@@ -2,7 +2,7 @@
 - [x] Handle escapes in strings. Example: `"\"hello world\";v=\"42\", "`
 - [x] Add `limit` helper to the query language
 - [x] Stream metadata from server in `QUERY` mode to inform client about the progress
-- [] Add `-persistent` option and implement persistent storage
+- [x] Add `-persistent` option and implement persistent storage
 - [] Write a client library for Python
 - [] Implement mechanisms to reduce data redundancy
 - [] Improve the querying speed by tracking checksums of strings
