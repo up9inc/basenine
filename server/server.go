@@ -285,8 +285,8 @@ func restoreCore() {
 	defer f.Close()
 	decoder := gob.NewDecoder(f)
 
-	var csExport *ConcurrentSliceExport
-	err = decoder.Decode(csExport)
+	var csExport ConcurrentSliceExport
+	err = decoder.Decode(&csExport)
 	if err != nil {
 		log.Printf("Error while restoring the core: %v\n", err.Error())
 		return
