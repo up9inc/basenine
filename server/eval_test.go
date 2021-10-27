@@ -88,6 +88,7 @@ var data = []struct {
 	{`model != nil`, `{"id":114905,"model":null,"brand":{"name":"Chevrolet"},"year":2021}`, false, 0},
 	{`model == nil`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0},
 	{`model != nil`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 0},
+	{`model == "\"hello world\";v=\"42\", "`, `{"brand":{"name":"Chevrolet"},"id":27502,"model":"\\\"hello world\\\";v=\\\"42\\\", ","year":2021}`, true, 0},
 	{`brand.name == "Chevrolet" and limit(100)`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 100},
 	{`brand.name != "Chevrolet" and limit(100)`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 100},
 }
