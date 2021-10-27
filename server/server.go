@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -39,6 +40,7 @@ var addr = flag.String("addr", "", "The address to listen to; default is \"\" (a
 var port = flag.Int("port", 9099, "The port to listen on.")
 var debug = flag.Bool("debug", false, "Enable debug logs.")
 var version = flag.Bool("version", false, "Print version and exit.")
+var persistent = flag.Bool("persistent", false, "Enable persistent mode. Dumps core on exit.")
 
 // Version of the software.
 const VERSION string = "0.1.3"
@@ -119,6 +121,19 @@ type ConcurrentSlice struct {
 	partitionSizeLimit int64
 }
 
+// Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
+type ConcurrentSliceExport struct {
+	LastOffset         int64
+	PartitionRefs      []int64
+	Offsets            []int64
+	PartitionPaths     []string
+	PartitionIndex     int64
+	PartitionSizeLimit int64
+}
+
+// Core dump filename
+const coreDumpFilename string = "basenine.gob"
+
 // Global file watcher
 var watcher *fsnotify.Watcher
 
@@ -135,9 +150,6 @@ const (
 )
 
 func init() {
-	// Clean up the database files.
-	removeDatabaseFiles()
-
 	// Initialize the ConcurrentSlice.
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
@@ -156,6 +168,14 @@ func init() {
 func main() {
 	// Parse the command-line arguments.
 	flag.Parse()
+
+	// If persistent mode is enabled, try to restore the core.
+	if *persistent {
+		restoreCore()
+	} else {
+		// Clean up the database files.
+		removeDatabaseFiles()
+	}
 
 	// Print version and exit.
 	if *version {
@@ -180,8 +200,7 @@ func main() {
 		<-c
 		quitConnections()
 		watcher.Close()
-		removeDatabaseFiles()
-		os.Exit(1)
+		handleExit()
 	}()
 
 	// Start accepting TCP connections.
@@ -211,6 +230,79 @@ func newPartition() *os.File {
 	check(err)
 
 	return f
+}
+
+// handleExit gracefully exists the server accordingly. Dumps core if "-persistent" enabled.
+func handleExit() {
+	if !*persistent {
+		removeDatabaseFiles()
+		// 7: killed by a signal and dumped core
+		os.Exit(7)
+	}
+
+	dumpCore()
+
+	// 0: process exited normally
+	os.Exit(1)
+}
+
+// Dumps the core into a file named "basenine.gob"
+func dumpCore() {
+	f, err := os.Create(coreDumpFilename)
+	check(err)
+	defer f.Close()
+	encoder := gob.NewEncoder(f)
+
+	// ConcurrentSlice has an embedded mutex. Therefore it cannot be dumped directly.
+	var csExport ConcurrentSliceExport
+	cs.Lock()
+	csExport.LastOffset = cs.lastOffset
+	csExport.PartitionRefs = cs.partitionRefs
+	for _, partition := range cs.partitions {
+		csExport.PartitionPaths = append(csExport.PartitionPaths, partition.Name())
+	}
+	csExport.PartitionIndex = cs.partitionIndex
+	csExport.PartitionSizeLimit = cs.partitionSizeLimit
+	cs.Unlock()
+
+	err = encoder.Encode(csExport)
+	if err != nil {
+		log.Printf("Error while dumping the core: %v\n", err.Error())
+		return
+	}
+
+	log.Printf("Dumped the core to: %s\n", coreDumpFilename)
+}
+
+// Restores the core from a file named "basenine.gob"
+// if it's present in current working directory
+func restoreCore() {
+	f, err := os.Open(coreDumpFilename)
+	if err != nil {
+		log.Printf("Error openning core dump: %v\n", err)
+		return
+	}
+	defer f.Close()
+	decoder := gob.NewDecoder(f)
+
+	var csExport *ConcurrentSliceExport
+	err = decoder.Decode(csExport)
+	if err != nil {
+		log.Printf("Error while restoring the core: %v\n", err.Error())
+		return
+	}
+
+	cs.lastOffset = csExport.LastOffset
+	cs.partitionRefs = csExport.PartitionRefs
+	for _, partitionPath := range csExport.PartitionPaths {
+		paritition, err := os.OpenFile(partitionPath, os.O_CREATE|os.O_WRONLY, 0644)
+		check(err)
+		cs.partitions = append(cs.partitions, paritition)
+	}
+	cs.partitionIndex = csExport.PartitionIndex
+	cs.partitionSizeLimit = csExport.PartitionSizeLimit
+
+	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 }
 
 // removeDatabaseFiles cleans up all of the database files.
