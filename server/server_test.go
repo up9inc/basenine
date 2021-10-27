@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -76,14 +75,6 @@ func TestServerInsertAndReadData(t *testing.T) {
 
 		rf.Seek(n, io.SeekStart)
 		b, n, err := readRecord(rf, n)
-
-		var d map[string]interface{}
-		json.Unmarshal(b, &d)
-		metadata, _ := d[MetadataFieldName].(map[string]interface{})
-		d["id"] = metadata["id"]
-		delete(d, MetadataFieldName)
-		b, _ = json.Marshal(d)
-
 		assert.Nil(t, err)
 		assert.Greater(t, n, int64(0))
 		assert.Equal(t, expected, string(b))
@@ -134,14 +125,6 @@ func TestServerProtocolInsertMode(t *testing.T) {
 
 	rf.Seek(n, io.SeekStart)
 	b, n, err := readRecord(rf, n)
-
-	var d map[string]interface{}
-	json.Unmarshal(b, &d)
-	metadata, _ := d[MetadataFieldName].(map[string]interface{})
-	d["id"] = metadata["id"]
-	delete(d, MetadataFieldName)
-	b, _ = json.Marshal(d)
-
 	assert.Nil(t, err)
 	assert.Greater(t, n, int64(0))
 	assert.Equal(t, expected, string(b))
@@ -184,19 +167,11 @@ func TestServerProtocolQueryMode(t *testing.T) {
 
 			for {
 				ok := scanner.Scan()
-				b := scanner.Bytes()
+				text := scanner.Text()
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
-
-				var d map[string]interface{}
-				json.Unmarshal(b, &d)
-				metadata, _ := d[MetadataFieldName].(map[string]interface{})
-				d["id"] = metadata["id"]
-				delete(d, MetadataFieldName)
-				b, _ = json.Marshal(d)
-
 				index++
-				assert.Equal(t, expected, string(b))
+				assert.Equal(t, expected, text)
 
 				if index > 99 {
 					return
@@ -254,18 +229,10 @@ func TestServerProtocolSingleMode(t *testing.T) {
 
 			for {
 				ok := scanner.Scan()
-				b := scanner.Bytes()
+				text := scanner.Text()
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
-
-				var d map[string]interface{}
-				json.Unmarshal(b, &d)
-				metadata, _ := d[MetadataFieldName].(map[string]interface{})
-				d["id"] = metadata["id"]
-				delete(d, MetadataFieldName)
-				b, _ = json.Marshal(d)
-
-				assert.Equal(t, expected, string(b))
+				assert.Equal(t, expected, text)
 
 				assert.True(t, ok)
 				return
@@ -393,19 +360,11 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 			for {
 				ok := scanner.Scan()
-				b := scanner.Bytes()
+				text := scanner.Text()
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
-
-				var d map[string]interface{}
-				json.Unmarshal(b, &d)
-				metadata, _ := d[MetadataFieldName].(map[string]interface{})
-				d["id"] = metadata["id"]
-				delete(d, MetadataFieldName)
-				b, _ = json.Marshal(d)
-
 				index++
-				assert.Equal(t, expected, string(b))
+				assert.Equal(t, expected, text)
 
 				if index > 99 {
 					return

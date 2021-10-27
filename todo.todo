@@ -1,7 +1,7 @@
 - [x] Check if `nil` really works or not. Add a test for it
 - [x] Handle escapes in strings. Example: `"\"hello world\";v=\"42\", "`
 - [x] Add `limit` helper to the query language
-- [x] Turn integer `id` field to a struct that has the ID value as well, change the key to `basenineMetadata`
+- [] Turn integer `id` field to a struct that has the ID value as well, change the key to `basenineMetadata`
 - [] Add `-persistent` option and implement persistent storage
 - [] Write a client library for Python
 - [] Implement mechanisms to reduce data redundancy

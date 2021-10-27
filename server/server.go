@@ -121,17 +121,6 @@ type ConcurrentSlice struct {
 // Global file watcher
 var watcher *fsnotify.Watcher
 
-// Metadata field name
-const MetadataFieldName string = "basenineMetadata"
-
-// Metadata info appended into each record
-type Metadata struct {
-	Id              uint64 `json:"id"`
-	Current         uint64 `json:"current"`
-	Total           uint64 `json:"total"`
-	NumberOfWritten uint64 `json:"numberOfWritten"`
-}
-
 func init() {
 	// Clean up the database files.
 	removeDatabaseFiles()
@@ -405,10 +394,9 @@ func insertData(data []byte) {
 	lastOffset = cs.lastOffset
 	f := cs.partitions[cs.partitionIndex]
 
-	// Add `basenineMetadata` and set the "id" field to the index of the record.
-	d[MetadataFieldName] = Metadata{
-		Id: uint64(l),
-	}
+	// TODO: Replace this with a substructure that serves as a metadata field.
+	// Set "id" field to the index of the record.
+	d["id"] = l
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -566,7 +554,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		cs.RLock()
 		subOffsets := cs.offsets[leftOff:]
 		subPartitionRefs := cs.partitionRefs[leftOff:]
-		totalNumberOfRecords := len(cs.offsets)
 		cs.RUnlock()
 
 		// Iterate through the next part of the offsets
@@ -618,24 +605,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				continue
 			}
-
-			// Unmarshal the record.
-			var d map[string]interface{}
-			json.Unmarshal(b, &d)
-
-			// Retrieve the "id" that's determined on insert-time.
-			metadata, _ := d[MetadataFieldName].(map[string]interface{})
-
-			// Repopulate the metadata field.
-			d[MetadataFieldName] = Metadata{
-				Id:              uint64(metadata["id"].(float64)),
-				NumberOfWritten: numberOfWritten + 1,
-				Current:         uint64(leftOff - 1),
-				Total:           uint64(totalNumberOfRecords),
-			}
-
-			// Marshal it back.
-			b, _ = json.Marshal(d)
 
 			// Evaluate the current record against the given query.
 			truth, err := Eval(expr, string(b))

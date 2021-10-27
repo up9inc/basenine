@@ -58,7 +58,7 @@ func TestSingle(t *testing.T) {
 	data, err := Single(HOST, PORT, id)
 	assert.Nil(t, err)
 
-	expected := fmt.Sprintf(`{"basenineMetadata":{"id":%d,"current":0,"total":0,"numberOfWritten":0},"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`, id)
+	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
 	assert.Equal(t, expected, string(data))
 }
 
@@ -92,7 +92,7 @@ func TestQuery(t *testing.T) {
 			err = json.Unmarshal(bytes, &d)
 			assert.Nil(t, err)
 
-			delete(d, MetadataFieldName)
+			delete(d, "id")
 
 			ret, err := json.Marshal(d)
 			assert.Nil(t, err)
