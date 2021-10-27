@@ -81,6 +81,7 @@ const (
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
 	CMD_LIMIT    string = "/limit"
+	CMD_METADATA string = "/metadata"
 )
 
 // Constants defines the database filename's prefix and file extension.
@@ -120,6 +121,18 @@ type ConcurrentSlice struct {
 
 // Global file watcher
 var watcher *fsnotify.Watcher
+
+// Metadata info that's streamed after each record
+type Metadata struct {
+	Current         uint64 `json:"current"`
+	Total           uint64 `json:"total"`
+	NumberOfWritten uint64 `json:"numberOfWritten"`
+}
+
+// Closing indicators
+const (
+	CloseConnection = "%quit%"
+)
 
 func init() {
 	// Clean up the database files.
@@ -326,7 +339,7 @@ func handleConnection(conn net.Conn) {
 // in case of an interruption.
 func quitConnections() {
 	for _, conn := range connections {
-		conn.Write([]byte("%quit%\n"))
+		conn.Write([]byte(fmt.Sprintf("%s\n", CloseConnection)))
 	}
 }
 
@@ -394,7 +407,6 @@ func insertData(data []byte) {
 	lastOffset = cs.lastOffset
 	f := cs.partitions[cs.partitionIndex]
 
-	// TODO: Replace this with a substructure that serves as a metadata field.
 	// Set "id" field to the index of the record.
 	d["id"] = l
 
@@ -554,6 +566,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		cs.RLock()
 		subOffsets := cs.offsets[leftOff:]
 		subPartitionRefs := cs.partitionRefs[leftOff:]
+		totalNumberOfRecords := len(cs.offsets)
 		cs.RUnlock()
 
 		// Iterate through the next part of the offsets
@@ -618,6 +631,18 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 					break
 				}
 				numberOfWritten++
+			}
+
+			metadata, _ := json.Marshal(Metadata{
+				NumberOfWritten: numberOfWritten,
+				Current:         uint64(leftOff - 1),
+				Total:           uint64(totalNumberOfRecords),
+			})
+
+			_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
+			if err != nil {
+				log.Printf("Write error: %v\n", err)
+				break
 			}
 		}
 

@@ -81,6 +81,7 @@ func TestQuery(t *testing.T) {
 	assert.Nil(t, err)
 
 	data := make(chan []byte)
+	meta := make(chan []byte)
 
 	handleDataChannel := func(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 		defer wg.Done()
@@ -108,11 +109,29 @@ func TestQuery(t *testing.T) {
 		}
 	}
 
+	handleMetaChannel := func(wg *sync.WaitGroup, c *Connection, meta chan []byte) {
+		defer wg.Done()
+		index := 0
+		for {
+			bytes := <-meta
+
+			var metadata *Metadata
+			err = json.Unmarshal(bytes, &metadata)
+			assert.Nil(t, err)
+
+			index++
+			if index > 14000 {
+				return
+			}
+		}
+	}
+
 	var wg sync.WaitGroup
 	go handleDataChannel(&wg, c, data)
-	wg.Add(1)
+	go handleMetaChannel(&wg, c, meta)
+	wg.Add(2)
 
-	c.Query(`chevy`, data)
+	c.Query(`chevy`, data, meta)
 	assert.Nil(t, err)
 
 	if waitTimeout(&wg, 1*time.Second) {

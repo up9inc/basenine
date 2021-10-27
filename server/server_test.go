@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -167,11 +170,16 @@ func TestServerProtocolQueryMode(t *testing.T) {
 
 			for {
 				ok := scanner.Scan()
-				text := scanner.Text()
+				bytes := scanner.Bytes()
+
+				command := handleCommands(bytes)
+				if command {
+					break
+				}
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 				index++
-				assert.Equal(t, expected, text)
+				assert.Equal(t, expected, string(bytes))
 
 				if index > 99 {
 					return
@@ -229,10 +237,15 @@ func TestServerProtocolSingleMode(t *testing.T) {
 
 			for {
 				ok := scanner.Scan()
-				text := scanner.Text()
+				bytes := scanner.Bytes()
+
+				command := handleCommands(bytes)
+				if command {
+					break
+				}
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
-				assert.Equal(t, expected, text)
+				assert.Equal(t, expected, string(bytes))
 
 				assert.True(t, ok)
 				return
@@ -288,9 +301,14 @@ func TestServerProtocolValidateMode(t *testing.T) {
 
 				for {
 					ok := scanner.Scan()
-					text := scanner.Text()
+					bytes := scanner.Bytes()
 
-					assert.Equal(t, row.response, text)
+					command := handleCommands(bytes)
+					if command {
+						break
+					}
+
+					assert.Equal(t, row.response, string(bytes))
 
 					assert.True(t, ok)
 					return
@@ -360,11 +378,16 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 			for {
 				ok := scanner.Scan()
-				text := scanner.Text()
+				bytes := scanner.Bytes()
+
+				command := handleCommands(bytes)
+				if command {
+					break
+				}
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 				index++
-				assert.Equal(t, expected, text)
+				assert.Equal(t, expected, string(bytes))
 
 				if index > 99 {
 					return
@@ -458,4 +481,27 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	cs.RUnlock()
 
 	removeDatabaseFiles()
+}
+
+// handleCommands is used by readConnection to make the server's orders
+// in the client to take effect. Such that the server can hang up
+// the connection.
+func handleCommands(bytes []byte) bool {
+	r, err := regexp.Compile("^%.*%$")
+	text := string(bytes)
+	if err == nil {
+		if strings.HasPrefix(text, CMD_METADATA) {
+			return true
+		} else if r.MatchString(text) {
+
+			switch {
+			case text == CloseConnection:
+				log.Println("Server is leaving. Hanging up.")
+			}
+
+			return true
+		}
+	}
+
+	return false
 }

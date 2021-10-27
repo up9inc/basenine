@@ -13,8 +13,27 @@ import (
 	"log"
 	"net"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
+)
+
+// Metadata info that's streamed after each record
+type Metadata struct {
+	Current         uint64 `json:"current"`
+	Total           uint64 `json:"total"`
+	NumberOfWritten uint64 `json:"numberOfWritten"`
+}
+
+// Commands refers to TCP connection modes.
+const (
+	CMD_INSERT   string = "/insert"
+	CMD_QUERY    string = "/query"
+	CMD_SINGLE   string = "/single"
+	CMD_VALIDATE string = "/validate"
+	CMD_MACRO    string = "/macro"
+	CMD_LIMIT    string = "/limit"
+	CMD_METADATA string = "/metadata"
 )
 
 // Closing indicators
@@ -51,18 +70,19 @@ func (c *Connection) SendText(text string) {
 
 // InsertMode turns the connection's mode into INSERT mode
 func (c *Connection) InsertMode() {
-	c.SendText("/insert")
+	c.SendText(CMD_INSERT)
 }
 
 // Query is the method that user should use to stream the records from the database.
 // It takes the filtering language (query) as the first parameter and
-// a []byte channel which the records will be streamed into.
-func (c *Connection) Query(query string, data chan []byte) {
+// a []byte channel which the records will be streamed into as the second parameter.
+// Third parameter is the channel for streaming metadata, progress of the query.
+func (c *Connection) Query(query string, data chan []byte, meta chan []byte) {
 	var wg sync.WaitGroup
-	go readConnection(&wg, c, data)
+	go readConnection(&wg, c, data, meta)
 	wg.Add(1)
 
-	c.SendText("/query")
+	c.SendText(CMD_QUERY)
 	c.SendText(query)
 }
 
@@ -78,10 +98,10 @@ func Single(host string, port string, id int) (data []byte, err error) {
 	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
-	go readConnection(&wg, c, ret)
+	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText("/single")
+	c.SendText(CMD_SINGLE)
 	c.SendText(fmt.Sprintf("%d", id))
 
 	data = <-ret
@@ -101,10 +121,10 @@ func Validate(host string, port string, query string) (err error) {
 	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
-	go readConnection(&wg, c, ret)
+	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText("/validate")
+	c.SendText(CMD_VALIDATE)
 	c.SendText(fmt.Sprintf("%s", query))
 
 	data := <-ret
@@ -128,10 +148,10 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
-	go readConnection(&wg, c, ret)
+	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText("/macro")
+	c.SendText(CMD_MACRO)
 	c.SendText(fmt.Sprintf("%s~%s", macro, expanded))
 
 	data := <-ret
@@ -156,10 +176,10 @@ func Limit(host string, port string, limit int64) (err error) {
 	ret := make(chan []byte)
 
 	var wg sync.WaitGroup
-	go readConnection(&wg, c, ret)
+	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText("/limit")
+	c.SendText(CMD_LIMIT)
 	c.SendText(fmt.Sprintf("%d", limit))
 
 	data := <-ret
@@ -173,7 +193,7 @@ func Limit(host string, port string, limit int64) (err error) {
 
 // readConnection is a Goroutine that recieves messages from the TCP connection
 // and send them to a []byte channel provided by the data parameter.
-func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
+func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte, meta chan []byte) {
 	defer wg.Done()
 	for {
 		scanner := bufio.NewScanner(c)
@@ -191,8 +211,16 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 
 			bytes := scanner.Bytes()
 
-			command := handleCommands(bytes)
-			if command {
+			command := handleCommands(bytes, meta)
+			switch command {
+			case CMD_METADATA:
+				b := make([]byte, len(bytes[len(CMD_METADATA)+1:]))
+				copy(b, bytes[len(CMD_METADATA)+1:])
+
+				meta <- b
+				continue
+			case CloseConnection:
+				log.Println("Server is leaving. Hanging up.")
 				break
 			}
 
@@ -207,20 +235,16 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte) {
 // handleCommands is used by readConnection to make the server's orders
 // in the client to take effect. Such that the server can hang up
 // the connection.
-func handleCommands(bytes []byte) bool {
+func handleCommands(bytes []byte, meta chan []byte) string {
 	r, err := regexp.Compile("^%.*%$")
 	text := string(bytes)
 	if err == nil {
-		if r.MatchString(text) {
-
-			switch {
-			case text == CloseConnection:
-				log.Println("Server is leaving. Hanging up.")
-			}
-
-			return true
+		if strings.HasPrefix(text, CMD_METADATA) {
+			return CMD_METADATA
+		} else if r.MatchString(text) {
+			return CloseConnection
 		}
 	}
 
-	return false
+	return ""
 }
