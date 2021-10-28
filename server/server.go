@@ -731,7 +731,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 			metadata, _ := json.Marshal(Metadata{
 				NumberOfWritten: numberOfWritten,
-				Current:         uint64(leftOff - 1),
+				Current:         uint64(leftOff),
 				Total:           uint64(totalNumberOfRecords),
 			})
 
