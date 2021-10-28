@@ -148,18 +148,30 @@ var comparisonOperations = map[string]interface{}{
 }
 
 func startsWith(args ...interface{}) interface{} {
+	if len(args) < 2 {
+		return false
+	}
 	return strings.HasPrefix(stringOperand(args[0]), stringOperand(args[1]))
 }
 
 func endsWith(args ...interface{}) interface{} {
+	if len(args) < 2 {
+		return false
+	}
 	return strings.HasSuffix(stringOperand(args[0]), stringOperand(args[1]))
 }
 
 func contains(args ...interface{}) interface{} {
+	if len(args) < 2 {
+		return false
+	}
 	return strings.Contains(stringOperand(args[0]), stringOperand(args[1]))
 }
 
 func datetime(args ...interface{}) interface{} {
+	if len(args) < 2 {
+		return false
+	}
 	layout := "01/02/2006, 3:04:05 PM"
 	t, err := time.Parse(layout, stringOperand(args[1]))
 	if err != nil {
