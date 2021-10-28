@@ -14,9 +14,10 @@ install: basenine
 clean:
 	rm basenine || true
 
-test: clean basenine test-client-go
+test: clean basenine test-server test-client-go coverage
+
+test-server:
 	cd server/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
-	$(MAKE) coverage
 
 test-client-go:
 	test/client_go.sh
