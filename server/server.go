@@ -429,8 +429,9 @@ func handleConnection(conn net.Conn) {
 		}
 	}
 
-	// Log the disconnect
+	// Close the file descriptor for this TCP connection
 	conn.Close()
+	// Log the disconnect
 	log.Println("Client at " + remoteAddr + " disconnected.")
 }
 
