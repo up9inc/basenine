@@ -361,7 +361,6 @@ func periodicPartitioner(ticker *time.Ticker) {
 				cs.partitions[cs.partitionIndex-2] = nil
 			}
 			cs.Unlock()
-			check(err)
 		}
 	}
 }
