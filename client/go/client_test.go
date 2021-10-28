@@ -137,3 +137,11 @@ func TestQuery(t *testing.T) {
 		t.Fatal("Timed out waiting for wait group")
 	}
 }
+
+func TestTCPConnectionLeak(t *testing.T) {
+	for i := 0; i < 10000; i++ {
+		err := Validate(HOST, PORT, `brand.name == "Chevrolet"`)
+		assert.Nil(t, err)
+		time.Sleep(1 * time.Millisecond)
+	}
+}

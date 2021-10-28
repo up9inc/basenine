@@ -430,6 +430,7 @@ func handleConnection(conn net.Conn) {
 	}
 
 	// Log the disconnect
+	conn.Close()
 	log.Println("Client at " + remoteAddr + " disconnected.")
 }
 
