@@ -46,6 +46,7 @@ A client can elevate itself to insert mode by sending `/insert` command.
 - **Query mode** let's you filter the records in the database based on a [filtering syntax named BFL](https://github.com/up9inc/basenine/wiki/BFL-Syntax-Reference).
 Query mode streams the results to the client and is able to keep up where it left off even if the database have millions of records.
 The TCP connection in this mode is long lasting as well. The filter cannot be changed without establishing a new connnection.
+The server also streams the query progress through `/metadata` command to the client.
 
 - **Single mode** is a short lasting TCP connection that returns a single record from the database based on the provided index value.
 
@@ -111,10 +112,11 @@ if err != nil {
     panic(err)
 }
 
-// Make a []byte channel to recieve the data
+// Make []byte channels to recieve the data and the meta
 data := make(chan []byte)
+meta := make(chan []byte)
 
-// Define a function to handle the stream
+// Define a function to handle the data stream
 handleDataChannel := func(wg *sync.WaitGroup, c *Connection, data chan []byte) {
     defer wg.Done()
     for {
@@ -126,8 +128,20 @@ handleDataChannel := func(wg *sync.WaitGroup, c *Connection, data chan []byte) {
     }
 }
 
+// Define a function to handle the meta stream
+handleMetaChannel := func(c *Connection, meta chan []byte) {
+    for {
+        bytes := <-meta
+
+        // Do something with bytes
+
+        c.Close()
+    }
+}
+
 var wg sync.WaitGroup
 go handleDataChannel(&wg, c, data)
+go handleMetaChannel(c, meta)
 wg.Add(1)
 
 c.Query(`brand.name == "Chevrolet"`, data)
