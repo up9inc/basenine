@@ -354,7 +354,9 @@ func periodicPartitioner(ticker *time.Ticker) {
 				discarded := cs.partitions[cs.partitionIndex-2]
 				discarded.Close()
 				err = watcher.Remove(discarded.Name())
-				check(err)
+				if err != nil {
+					log.Printf("Watch removal error: %v\n", err.Error())
+				}
 				os.Remove(discarded.Name())
 				cs.partitions[cs.partitionIndex-2] = nil
 			}
