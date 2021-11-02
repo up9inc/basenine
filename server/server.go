@@ -767,7 +767,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		}
 
 		if rlimit > 0 {
-			numberOfWritten, err = rlimitWrite(conn, rlimit, rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
+			numberOfWritten, err = rlimitWrite(conn, f, rlimit, rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
 			rlimit = 0
 		}
 
@@ -884,8 +884,7 @@ func setLimit(conn net.Conn, data []byte) {
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
 
-func rlimitWrite(conn net.Conn, rlimit uint64, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
-	var f *os.File
+func rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
 	startIndex := len(offsetQueue) - int(rlimit)
 	if startIndex < 0 {
 		startIndex = 0
@@ -898,6 +897,11 @@ func rlimitWrite(conn net.Conn, rlimit uint64, offsetQueue []int64, partitionRef
 		cs.RLock()
 		fRef := cs.partitions[partitionRef]
 		cs.RUnlock()
+
+		// File descriptor nil means; the partition is removed. So we pass this offset.
+		if fRef == nil {
+			continue
+		}
 
 		// f == nil means we didn't open any partition yet.
 		// fRef.Name() != f.Name() means we're switching to the next partition.
