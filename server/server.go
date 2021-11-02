@@ -648,7 +648,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	// The state to track the last offset's index in cs.offsets
 	var leftOff int64 = 0
 
-	// The queues for `rlimit` helper
+	// The queues for rlimit helper.
 	var rlimitOffsetQueue []int64
 	var rlimitPartitionRefQueue []int64
 	if rlimit > 0 {
@@ -675,6 +675,11 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		subPartitionRefs := cs.partitionRefs[leftOff:]
 		totalNumberOfRecords := len(cs.offsets)
 		cs.RUnlock()
+
+		// Disable rlimit if it's bigger than the total records.
+		if rlimit > 0 && int(rlimit) >= len(subOffsets) {
+			rlimit = 0
+		}
 
 		// Iterate through the next part of the offsets
 		for i, offset := range subOffsets {
@@ -761,7 +766,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		}
 
 		if rlimit > 0 {
-			numberOfWritten, err = rlimitWrite(conn, int(rlimit), rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
+			numberOfWritten, err = rlimitWrite(conn, rlimit, rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
 			rlimit = 0
 		}
 
@@ -873,10 +878,14 @@ func setLimit(conn net.Conn, data []byte) {
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
 
-func rlimitWrite(conn net.Conn, rlimit int, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
+func rlimitWrite(conn net.Conn, rlimit uint64, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
 	var f *os.File
-	offsetQueue = offsetQueue[len(offsetQueue)-rlimit:]
-	partitionRefQueue = partitionRefQueue[len(partitionRefQueue)-rlimit:]
+	startIndex := len(offsetQueue) - int(rlimit)
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	offsetQueue = offsetQueue[startIndex:]
+	partitionRefQueue = partitionRefQueue[startIndex:]
 	for i, offset := range offsetQueue {
 		partitionRef := partitionRefQueue[i]
 
