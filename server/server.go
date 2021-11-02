@@ -782,7 +782,7 @@ func getOffsetAndPartition(index int) (offset int64, f *os.File, err error) {
 	offset = cs.offsets[index]
 	i := cs.partitionRefs[index]
 	fRef := cs.partitions[i]
-	if f == nil {
+	if fRef == nil {
 		err = errors.New("Read on not opened partition")
 	} else {
 		f, err = os.Open(fRef.Name())
