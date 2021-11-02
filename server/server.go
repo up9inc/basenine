@@ -682,6 +682,8 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			rlimit = 0
 		}
 
+		var metadata []byte
+
 		// Iterate through the next part of the offsets
 		for i, offset := range subOffsets {
 			leftOff++
@@ -697,6 +699,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			cs.RLock()
 			partitionRef = subPartitionRefs[i]
 			fRef := cs.partitions[partitionRef]
+			totalNumberOfRecords = len(cs.offsets)
 			cs.RUnlock()
 
 			// File descriptor nil means; the partition is removed. So we pass this offset.
@@ -753,22 +756,31 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				}
 			}
 
-			metadata, _ := json.Marshal(Metadata{
+			metadata, _ = json.Marshal(Metadata{
 				NumberOfWritten: numberOfWritten,
 				Current:         uint64(leftOff),
 				Total:           uint64(totalNumberOfRecords),
 			})
 
-			_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
-			if err != nil {
-				log.Printf("Write error: %v\n", err)
-				break
+			if totalNumberOfRecords < 100 || int(leftOff)%(totalNumberOfRecords/100) == 0 {
+				_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
+				if err != nil {
+					log.Printf("Write error: %v\n", err)
+					break
+				}
 			}
 		}
 
 		if rlimit > 0 {
 			numberOfWritten, err = rlimitWrite(conn, f, rlimit, rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
 			rlimit = 0
+		}
+
+		if len(metadata) > 0 {
+			_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
+			if err != nil {
+				log.Printf("Write error: %v\n", err)
+			}
 		}
 
 		// Block until a partition is modified
