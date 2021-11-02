@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -775,12 +776,17 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	}
 }
 
-// Safely acces the offsets and partition references
+// Safely access the offsets and partition references
 func getOffsetAndPartition(index int) (offset int64, f *os.File, err error) {
 	cs.RLock()
 	offset = cs.offsets[index]
 	i := cs.partitionRefs[index]
-	f, err = os.Open(cs.partitions[i].Name())
+	fRef := cs.partitions[i]
+	if f == nil {
+		err = errors.New("Read on not opened partition")
+	} else {
+		f, err = os.Open(fRef.Name())
+	}
 	cs.RUnlock()
 	return
 }
