@@ -15,7 +15,7 @@ import (
 // computeCallExpression does compile-time evaluations for the
 // CallExpression struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, helper *string, path string, limit uint64, err error) {
+func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, helper *string, path string, limit uint64, rlimit uint64, err error) {
 	if call.Parameters == nil {
 		// Not a function call
 		if call.Identifier != nil {
@@ -33,7 +33,7 @@ func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *
 
 			// Queries like `request.headers["x"].y == "z"`` goes here
 			if call.SelectExpression.Expression != nil {
-				_, limit, err = computeExpression(call.SelectExpression.Expression, path)
+				_, limit, rlimit, err = computeExpression(call.SelectExpression.Expression, path)
 				return
 			}
 		}
@@ -52,11 +52,15 @@ func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *
 		helper = &segments[len(segments)-1]
 		_jsonPath = _jsonPath[:len(_jsonPath)-1]
 
-		if *helper == "limit" {
+		if *helper == "limit" || *helper == "rlimit" {
 			if len(call.Parameters) > 0 {
 				v, err := evalExpression(call.Parameters[0].Expression, nil)
 				if err == nil {
-					limit = uint64(float64Operand(v))
+					if *helper == "rlimit" {
+						rlimit = uint64(float64Operand(v))
+					} else {
+						limit = uint64(float64Operand(v))
+					}
 				}
 			}
 		}
@@ -69,11 +73,11 @@ func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *
 // computePrimary does compile-time evaluations for the
 // Primary struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computePrimary(pri *Primary, prependPath string) (path string, limit uint64, err error) {
+func computePrimary(pri *Primary, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	if pri.SubExpression != nil {
-		path, limit, err = computeExpression(pri.SubExpression, prependPath)
+		path, limit, rlimit, err = computeExpression(pri.SubExpression, prependPath)
 	} else if pri.CallExpression != nil {
-		pri.JsonPath, pri.Helper, path, limit, err = computeCallExpression(pri.CallExpression, prependPath)
+		pri.JsonPath, pri.Helper, path, limit, rlimit, err = computeCallExpression(pri.CallExpression, prependPath)
 	} else if pri.Regex != nil {
 		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}
@@ -81,12 +85,12 @@ func computePrimary(pri *Primary, prependPath string) (path string, limit uint64
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeUnary(unar *Unary, prependPath string) (path string, limit uint64, err error) {
+func computeUnary(unar *Unary, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
 	if unar.Unary != nil {
-		path, limit, err = computeUnary(unar.Unary, prependPath)
+		path, limit, rlimit, err = computeUnary(unar.Unary, prependPath)
 	} else {
-		_path, limit, err = computePrimary(unar.Primary, prependPath)
+		_path, limit, rlimit, err = computePrimary(unar.Primary, prependPath)
 		if path == "" {
 			path = _path
 		}
@@ -95,11 +99,11 @@ func computeUnary(unar *Unary, prependPath string) (path string, limit uint64, e
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeComparison(comp *Comparison, prependPath string) (path string, limit uint64, err error) {
+func computeComparison(comp *Comparison, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
-	path, limit, err = computeUnary(comp.Unary, prependPath)
+	path, limit, rlimit, err = computeUnary(comp.Unary, prependPath)
 	if comp.Next != nil {
-		_path, limit, err = computeComparison(comp.Next, prependPath)
+		_path, limit, rlimit, err = computeComparison(comp.Next, prependPath)
 		if path == "" {
 			path = _path
 		}
@@ -108,11 +112,11 @@ func computeComparison(comp *Comparison, prependPath string) (path string, limit
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeEquality(equ *Equality, prependPath string) (path string, limit uint64, err error) {
+func computeEquality(equ *Equality, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
-	path, limit, err = computeComparison(equ.Comparison, prependPath)
+	path, limit, rlimit, err = computeComparison(equ.Comparison, prependPath)
 	if equ.Next != nil {
-		_path, limit, err = computeEquality(equ.Next, prependPath)
+		_path, limit, rlimit, err = computeEquality(equ.Next, prependPath)
 		if path == "" {
 			path = _path
 		}
@@ -121,11 +125,11 @@ func computeEquality(equ *Equality, prependPath string) (path string, limit uint
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeLogical(logic *Logical, prependPath string) (path string, limit uint64, err error) {
+func computeLogical(logic *Logical, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
-	path, limit, err = computeEquality(logic.Equality, prependPath)
+	path, limit, rlimit, err = computeEquality(logic.Equality, prependPath)
 	if logic.Next != nil {
-		_path, limit, err = computeLogical(logic.Next, prependPath)
+		_path, limit, rlimit, err = computeLogical(logic.Next, prependPath)
 		if path == "" {
 			path = _path
 		}
@@ -134,18 +138,18 @@ func computeLogical(logic *Logical, prependPath string) (path string, limit uint
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeExpression(expr *Expression, prependPath string) (path string, limit uint64, err error) {
+func computeExpression(expr *Expression, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	if expr.Logical == nil {
 		return
 	}
-	path, limit, err = computeLogical(expr.Logical, prependPath)
+	path, limit, rlimit, err = computeLogical(expr.Logical, prependPath)
 	return
 }
 
 // Precompute does compile-time evaluations on parsed query (AST/Expression)
 // to prevent unnecessary computations in Eval() method.
 // Modifies the fields of only the Primary struct.
-func Precompute(expr *Expression) (limit uint64, err error) {
-	_, limit, err = computeExpression(expr, "")
+func Precompute(expr *Expression) (limit uint64, rlimit uint64, err error) {
+	_, limit, rlimit, err = computeExpression(expr, "")
 	return
 }

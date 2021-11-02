@@ -177,6 +177,13 @@ func limit(args ...interface{}) interface{} {
 	return true
 }
 
+func rlimit(args ...interface{}) interface{} {
+	// Returns true no matter what. Evaluated compile-time,
+	// limits the number of records returned as a result of the query in reverse
+	// but in a weird way such that it limits the past.
+	return true
+}
+
 // Map of helper methods
 var helpers = map[string]interface{}{
 	"startsWith": startsWith,
@@ -184,6 +191,7 @@ var helpers = map[string]interface{}{
 	"contains":   contains,
 	"datetime":   datetime,
 	"limit":      limit,
+	"rlimit":     rlimit,
 }
 
 // Iterates and evaulates each parameter of a given function call

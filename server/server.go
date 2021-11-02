@@ -639,7 +639,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	}
 
 	// Do compile-time evaluations.
-	limit, err := Precompute(expr)
+	limit, rlimit, err := Precompute(expr)
 	check(err)
 
 	// Number of written records to the TCP connection.
@@ -647,6 +647,14 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 	// The state to track the last offset's index in cs.offsets
 	var leftOff int64 = 0
+
+	// The queues for `rlimit` helper
+	var rlimitOffsetQueue []int64
+	var rlimitPartitionRefQueue []int64
+	if rlimit > 0 {
+		rlimitOffsetQueue = make([]int64, 0)
+		rlimitPartitionRefQueue = make([]int64, 0)
+	}
 
 	for {
 		// f is the current partition we're reading the data from.
@@ -679,8 +687,10 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 
 			// Safely access the *os.File pointer that the current offset refers to.
+			var partitionRef int64
 			cs.RLock()
-			fRef := cs.partitions[subPartitionRefs[i]]
+			partitionRef = subPartitionRefs[i]
+			fRef := cs.partitions[partitionRef]
 			cs.RUnlock()
 
 			// File descriptor nil means; the partition is removed. So we pass this offset.
@@ -724,12 +734,17 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 			// Write the record into TCP connection if it passes the query.
 			if truth {
-				_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
-				if err != nil {
-					log.Printf("Write error: %v\n", err)
-					break
+				if rlimit > 0 {
+					rlimitOffsetQueue = append(rlimitOffsetQueue, offset)
+					rlimitPartitionRefQueue = append(rlimitPartitionRefQueue, partitionRef)
+				} else {
+					_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+					if err != nil {
+						log.Printf("Write error: %v\n", err)
+						break
+					}
+					numberOfWritten++
 				}
-				numberOfWritten++
 			}
 
 			metadata, _ := json.Marshal(Metadata{
@@ -743,6 +758,11 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				log.Printf("Write error: %v\n", err)
 				break
 			}
+		}
+
+		if rlimit > 0 {
+			numberOfWritten, err = rlimitWrite(conn, int(rlimit), rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
+			rlimit = 0
 		}
 
 		// Block until a partition is modified
@@ -851,4 +871,56 @@ func setLimit(conn net.Conn, data []byte) {
 	cs.Unlock()
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
+}
+
+func rlimitWrite(conn net.Conn, rlimit int, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
+	var f *os.File
+	offsetQueue = offsetQueue[len(offsetQueue)-rlimit:]
+	partitionRefQueue = partitionRefQueue[len(partitionRefQueue)-rlimit:]
+	for i, offset := range offsetQueue {
+		partitionRef := partitionRefQueue[i]
+
+		cs.RLock()
+		fRef := cs.partitions[partitionRef]
+		cs.RUnlock()
+
+		// f == nil means we didn't open any partition yet.
+		// fRef.Name() != f.Name() means we're switching to the next partition.
+		if f == nil || fRef.Name() != f.Name() {
+			if f != nil && fRef.Name() != f.Name() {
+				// We're switching to the next partition, close the current partition.
+				f.Close()
+			}
+
+			// Open the partition that the current offset refers to.
+			f, err = os.Open(fRef.Name())
+
+			// If the file cannot be opened, pass.
+			if err != nil {
+				continue
+			}
+		}
+
+		// Seek to the offset
+		f.Seek(offset, io.SeekStart)
+
+		// Read the record into b
+		var b []byte
+		b, _, err = readRecord(f, offset)
+
+		// Even if it's EOF, continue.
+		// Because a later offset might point to a previous region of the file.
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			continue
+		}
+
+		_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+		if err != nil {
+			log.Printf("Write error: %v\n", err)
+			break
+		}
+		numberOfWritten++
+	}
+	numberOfWrittenNew = numberOfWritten
+	return
 }

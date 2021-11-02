@@ -138,69 +138,82 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 }
 
+var testServerProtocolQueryModeData = []struct {
+	query  string
+	limit  int
+	rlimit int
+}{
+	{`brand.name == "Chevrolet"`, 100, 100},
+	{`brand.name == "Chevrolet" and limit(10)`, 10, 100},
+	{`brand.name == "Chevrolet" and rlimit(10)`, 10, 10},
+}
+
 func TestServerProtocolQueryMode(t *testing.T) {
-	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
-	query := `brand.name == "Chevrolet"`
+	for _, row := range testServerProtocolQueryModeData {
+		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
-	cs = ConcurrentSlice{
-		partitionIndex: -1,
-	}
+		cs = ConcurrentSlice{
+			partitionIndex: -1,
+		}
 
-	server, client := net.Pipe()
-	go handleConnection(server)
+		server, client := net.Pipe()
+		go handleConnection(server)
 
-	f := newPartition()
-	assert.NotNil(t, f)
+		f := newPartition()
+		assert.NotNil(t, f)
 
-	for index := 0; index < 100; index++ {
-		insertData([]byte(payload))
-	}
+		total := 100
 
-	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
-		defer wg.Done()
-		index := 0
-		for {
-			scanner := bufio.NewScanner(conn)
+		for index := 0; index < total; index++ {
+			insertData([]byte(payload))
+		}
 
+		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+			defer wg.Done()
+			index := total - row.rlimit
 			for {
-				ok := scanner.Scan()
-				bytes := scanner.Bytes()
+				scanner := bufio.NewScanner(conn)
 
-				command := handleCommands(bytes)
-				if command {
-					break
+				for {
+					ok := scanner.Scan()
+					bytes := scanner.Bytes()
+
+					command := handleCommands(bytes)
+					if command {
+						break
+					}
+
+					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+					index++
+					assert.Equal(t, expected, string(bytes))
+
+					if index > (row.limit - 1) {
+						return
+					}
+
+					assert.True(t, ok)
 				}
-
-				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
-				index++
-				assert.Equal(t, expected, string(bytes))
-
-				if index > 99 {
-					return
-				}
-
-				assert.True(t, ok)
 			}
 		}
-	}
 
-	var wg sync.WaitGroup
-	go readConnection(&wg, client)
-	wg.Add(1)
+		var wg sync.WaitGroup
+		go readConnection(&wg, client)
+		wg.Add(1)
 
-	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/query\n"))
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte("/query\n"))
 
-	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte(fmt.Sprintf("%s\n", query)))
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
 
-	if waitTimeout(&wg, 1*time.Second) {
-		t.Fatal("Timed out waiting for wait group")
-	} else {
-		client.Close()
-		server.Close()
+		if waitTimeout(&wg, 1*time.Second) {
+			t.Fatal("Timed out waiting for wait group")
+		} else {
+			client.Close()
+			server.Close()
 
-		removeDatabaseFiles()
+			removeDatabaseFiles()
+		}
 	}
 }
 
