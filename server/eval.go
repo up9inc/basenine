@@ -160,7 +160,7 @@ func contains(args ...interface{}) interface{} {
 }
 
 func datetime(args ...interface{}) interface{} {
-	layout := "01/02/2006, 3:04:05 PM"
+	layout := "1/2/2006, 3:04:05 PM"
 	t, err := time.Parse(layout, stringOperand(args[1]))
 	if err != nil {
 		return false
