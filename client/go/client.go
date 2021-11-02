@@ -192,7 +192,7 @@ func Limit(host string, port string, limit int64) (err error) {
 }
 
 // readConnection is a Goroutine that recieves messages from the TCP connection
-// and send them to a []byte channel provided by the data parameter.
+// and sends them to a []byte channel provided by the data parameter.
 func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte, meta chan []byte) {
 	defer wg.Done()
 	for {
