@@ -241,14 +241,14 @@ func handleExit() {
 		os.Exit(7)
 	}
 
-	dumpCore()
+	dumpCore(false)
 
 	// 0: process exited normally
 	os.Exit(1)
 }
 
 // Dumps the core into a file named "basenine.gob"
-func dumpCore() {
+func dumpCore(silent bool) {
 	f, err := os.Create(coreDumpFilename)
 	check(err)
 	defer f.Close()
@@ -273,7 +273,9 @@ func dumpCore() {
 		return
 	}
 
-	log.Printf("Dumped the core to: %s\n", coreDumpFilename)
+	if !silent {
+		log.Printf("Dumped the core to: %s\n", coreDumpFilename)
+	}
 }
 
 // Restores the core from a file named "basenine.gob"
@@ -281,7 +283,7 @@ func dumpCore() {
 func restoreCore() {
 	f, err := os.Open(coreDumpFilename)
 	if err != nil {
-		log.Printf("Error openning core dump: %v\n", err)
+		log.Printf("Warning while restoring the core: %v\n", err)
 		return
 	}
 	defer f.Close()
@@ -327,6 +329,11 @@ func periodicPartitioner(ticker *time.Ticker) {
 	var f *os.File
 	for {
 		<-ticker.C
+
+		if *persistent {
+			// Dump the core periodically
+			dumpCore(true)
+		}
 
 		var partitionSizeLimit int64
 
