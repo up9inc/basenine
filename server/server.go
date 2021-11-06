@@ -261,7 +261,11 @@ func dumpCore(silent bool) {
 	csExport.PartitionRefs = cs.partitionRefs
 	csExport.Offsets = cs.offsets
 	for _, partition := range cs.partitions {
-		csExport.PartitionPaths = append(csExport.PartitionPaths, partition.Name())
+		partitionPath := ""
+		if partition != nil {
+			partitionPath = partition.Name()
+		}
+		csExport.PartitionPaths = append(csExport.PartitionPaths, partitionPath)
 	}
 	csExport.PartitionIndex = cs.partitionIndex
 	csExport.PartitionSizeLimit = cs.partitionSizeLimit
@@ -300,6 +304,9 @@ func restoreCore() {
 	cs.partitionRefs = csExport.PartitionRefs
 	cs.offsets = csExport.Offsets
 	for _, partitionPath := range csExport.PartitionPaths {
+		if partitionPath == "" {
+			continue
+		}
 		paritition, err := os.OpenFile(partitionPath, os.O_CREATE|os.O_WRONLY, 0644)
 		check(err)
 		cs.partitions = append(cs.partitions, paritition)
