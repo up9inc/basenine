@@ -8,10 +8,14 @@ import (
 
 func TestMacro(t *testing.T) {
 	query := `
-http or !amqp and request.method == "GET" and request.headers["http"] == "amqp"
+http or !amqp and request.method == "GET" and request.headers["http"] == "x-amqp-y"
+
+http or !amqp and request.method == "GET" and request.headers["http"] == "x-amqp-y"
 	`
 	expected := `
-(proto.name == "http") or !(proto.name == "amqp") and request.method == "GET" and request.headers["http"] == "amqp"
+(proto.name == "http") or !(proto.name == "amqp") and request.method == "GET" and request.headers["http"] == "x-amqp-y"
+
+(proto.name == "http") or !(proto.name == "amqp") and request.method == "GET" and request.headers["http"] == "x-amqp-y"
 	`
 
 	addMacro("http", "proto.name == \"http\"")

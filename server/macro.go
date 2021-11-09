@@ -24,7 +24,7 @@ func addMacro(macro string, expanded string) {
 func expandMacros(query string) (string, error) {
 	var err error
 	for macro, expanded := range macros {
-		regex := regexp2.MustCompile(fmt.Sprintf(`(?<!["'])(%s)(?!["'])`, macro), regexp2.None)
+		regex := regexp2.MustCompile(fmt.Sprintf(`(%s)(?=(?:[^"]|"[^"]*")*$)`, macro), regexp2.None)
 		query, err = regex.Replace(query, expanded, -1, -1)
 		if err != nil {
 			return query, err
