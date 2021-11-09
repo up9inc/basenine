@@ -144,7 +144,7 @@ go handleDataChannel(&wg, c, data)
 go handleMetaChannel(c, meta)
 wg.Add(1)
 
-c.Query(`brand.name == "Chevrolet"`, data)
+c.Query(`brand.name == "Chevrolet"`, data, meta)
 
 wg.Wait()
 ```
