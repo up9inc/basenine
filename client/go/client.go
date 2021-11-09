@@ -78,6 +78,8 @@ func (c *Connection) InsertMode() {
 // a []byte channel which the records will be streamed into as the second parameter.
 // Third parameter is the channel for streaming metadata, progress of the query.
 func (c *Connection) Query(query string, data chan []byte, meta chan []byte) {
+	query = strings.Replace(query, "\n", " ", -1)
+
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, data, meta)
 	wg.Add(1)
@@ -112,6 +114,8 @@ func Single(host string, port string, id int) (data []byte, err error) {
 // Validate validates the given query against syntax errors by passing the query
 // to the database server at host:port
 func Validate(host string, port string, query string) (err error) {
+	query = strings.Replace(query, "\n", " ", -1)
+
 	var c *Connection
 	c, err = NewConnection(host, port)
 	if err != nil {
