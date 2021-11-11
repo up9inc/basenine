@@ -241,14 +241,14 @@ func handleExit() {
 		os.Exit(7)
 	}
 
-	dumpCore(false)
+	dumpCore(false, false)
 
 	// 0: process exited normally
 	os.Exit(1)
 }
 
 // Dumps the core into a file named "basenine.gob"
-func dumpCore(silent bool) {
+func dumpCore(silent bool, dontLock bool) {
 	f, err := os.Create(coreDumpFilename)
 	check(err)
 	defer f.Close()
@@ -256,7 +256,9 @@ func dumpCore(silent bool) {
 
 	// ConcurrentSlice has an embedded mutex. Therefore it cannot be dumped directly.
 	var csExport ConcurrentSliceExport
-	cs.Lock()
+	if !dontLock {
+		cs.Lock()
+	}
 	csExport.LastOffset = cs.lastOffset
 	csExport.PartitionRefs = cs.partitionRefs
 	csExport.Offsets = cs.offsets
@@ -269,7 +271,9 @@ func dumpCore(silent bool) {
 	}
 	csExport.PartitionIndex = cs.partitionIndex
 	csExport.PartitionSizeLimit = cs.partitionSizeLimit
-	cs.Unlock()
+	if !dontLock {
+		cs.Unlock()
+	}
 
 	err = encoder.Encode(csExport)
 	if err != nil {
@@ -339,7 +343,7 @@ func periodicPartitioner(ticker *time.Ticker) {
 
 		if *persistent {
 			// Dump the core periodically
-			dumpCore(true)
+			dumpCore(true, false)
 		}
 
 		var partitionSizeLimit int64
@@ -374,6 +378,11 @@ func periodicPartitioner(ticker *time.Ticker) {
 				}
 				os.Remove(discarded.Name())
 				cs.partitions[cs.partitionIndex-2] = nil
+
+				if *persistent {
+					// Dump the core in case of a partition removal
+					dumpCore(true, true)
+				}
 			}
 			cs.Unlock()
 		}
