@@ -717,6 +717,18 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			// If the number of written records is greater than or equal to the limit
 			// and if the limit is not zero then stop the stream.
 			if limit != 0 && numberOfWritten >= limit {
+				// Do meta periodic update for 3 seconds in case of `limit` helper
+				for i := 0; i < 6; i++ {
+					if len(metadata) > 0 {
+						_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
+						if err != nil {
+							log.Printf("Write error: %v\n", err)
+						}
+					} else {
+						break
+					}
+					time.Sleep(500 * time.Millisecond)
+				}
 				return
 			}
 
@@ -826,6 +838,8 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 					if stopMetaPeriodicUpdate {
 						break
 					}
+				} else {
+					break
 				}
 				time.Sleep(500 * time.Millisecond)
 			}
