@@ -91,8 +91,10 @@ var data = []struct {
 	{`model != nil`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 0, 0},
 	{`model == "\"hello world\";v=\"42\", "`, `{"brand":{"name":"Chevrolet"},"id":27502,"model":"\\\"hello world\\\";v=\\\"42\\\", ","year":2021}`, true, 0, 0},
 	{`brand.name == "Chevrolet" and limit(100)`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 100, 0},
+	{`limit(100) and brand.name == "Chevrolet"`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 100, 0},
 	{`brand.name != "Chevrolet" and limit(100)`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 100, 0},
 	{`brand.name == "Chevrolet" and rlimit(100)`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 0, 100},
+	{`rlimit(100) and brand.name == "Chevrolet"`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 0, 100},
 	{`brand.name.startsWith()`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0, 0},
 	{`brand.name.endsWith()`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0, 0},
 	{`brand.name.contains()`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0, 0},
@@ -112,8 +114,8 @@ func TestEval(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		assert.Equal(t, limit, row.limit)
-		assert.Equal(t, rlimit, row.rlimit)
+		assert.Equal(t, row.limit, limit)
+		assert.Equal(t, row.rlimit, rlimit)
 		// repr.Println(expr)
 		truth, err := Eval(expr, row.json)
 		if err != nil {

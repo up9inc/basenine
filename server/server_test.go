@@ -145,7 +145,9 @@ var testServerProtocolQueryModeData = []struct {
 }{
 	{`brand.name == "Chevrolet"`, 100, 100},
 	{`brand.name == "Chevrolet" and limit(10)`, 10, 100},
+	{`limit(10) and brand.name == "Chevrolet"`, 10, 100},
 	{`brand.name == "Chevrolet" and rlimit(10)`, 10, 10},
+	{`rlimit(10) and brand.name == "Chevrolet"`, 10, 10},
 }
 
 func TestServerProtocolQueryMode(t *testing.T) {

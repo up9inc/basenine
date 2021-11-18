@@ -12,6 +12,21 @@ import (
 	jp "github.com/ohler55/ojg/jp"
 )
 
+// Backpropagates the values returned from the binary expressions
+func backpropagate(xPath string, xLimit uint64, xRlimit uint64, yPath string, yLimit uint64, yRlimit uint64) (path string, limit uint64, rlimit uint64) {
+	if xPath == "" {
+		xPath = yPath
+	}
+	if xLimit == 0 {
+		xLimit = yLimit
+	}
+	if xRlimit == 0 {
+		xRlimit = yRlimit
+	}
+
+	return xPath, xLimit, xRlimit
+}
+
 // computeCallExpression does compile-time evaluations for the
 // CallExpression struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
@@ -87,13 +102,12 @@ func computePrimary(pri *Primary, prependPath string) (path string, limit uint64
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeUnary(unar *Unary, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
+	var _limit, _rlimit uint64
 	if unar.Unary != nil {
 		path, limit, rlimit, err = computeUnary(unar.Unary, prependPath)
 	} else {
-		_path, limit, rlimit, err = computePrimary(unar.Primary, prependPath)
-		if path == "" {
-			path = _path
-		}
+		_path, _limit, _rlimit, err = computePrimary(unar.Primary, prependPath)
+		path, limit, rlimit = backpropagate(path, limit, rlimit, _path, _limit, _rlimit)
 	}
 	return
 }
@@ -101,12 +115,11 @@ func computeUnary(unar *Unary, prependPath string) (path string, limit uint64, r
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeComparison(comp *Comparison, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
+	var _limit, _rlimit uint64
 	path, limit, rlimit, err = computeUnary(comp.Unary, prependPath)
 	if comp.Next != nil {
-		_path, limit, rlimit, err = computeComparison(comp.Next, prependPath)
-		if path == "" {
-			path = _path
-		}
+		_path, _limit, _rlimit, err = computeComparison(comp.Next, prependPath)
+		path, limit, rlimit = backpropagate(path, limit, rlimit, _path, _limit, _rlimit)
 	}
 	return
 }
@@ -114,12 +127,11 @@ func computeComparison(comp *Comparison, prependPath string) (path string, limit
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeEquality(equ *Equality, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
+	var _limit, _rlimit uint64
 	path, limit, rlimit, err = computeComparison(equ.Comparison, prependPath)
 	if equ.Next != nil {
-		_path, limit, rlimit, err = computeEquality(equ.Next, prependPath)
-		if path == "" {
-			path = _path
-		}
+		_path, _limit, _rlimit, err = computeEquality(equ.Next, prependPath)
+		path, limit, rlimit = backpropagate(path, limit, rlimit, _path, _limit, _rlimit)
 	}
 	return
 }
@@ -127,12 +139,11 @@ func computeEquality(equ *Equality, prependPath string) (path string, limit uint
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeLogical(logic *Logical, prependPath string) (path string, limit uint64, rlimit uint64, err error) {
 	var _path string
+	var _limit, _rlimit uint64
 	path, limit, rlimit, err = computeEquality(logic.Equality, prependPath)
 	if logic.Next != nil {
-		_path, limit, rlimit, err = computeLogical(logic.Next, prependPath)
-		if path == "" {
-			path = _path
-		}
+		_path, _limit, _rlimit, err = computeLogical(logic.Next, prependPath)
+		path, limit, rlimit = backpropagate(path, limit, rlimit, _path, _limit, _rlimit)
 	}
 	return
 }
