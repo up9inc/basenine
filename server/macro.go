@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/dlclark/regexp2"
 )
@@ -23,9 +24,24 @@ func addMacro(macro string, expanded string) {
 // of the macro inside the string literals.
 func expandMacros(query string) (string, error) {
 	var err error
-	for macro, expanded := range macros {
-		regex := regexp2.MustCompile(fmt.Sprintf(`(%s)(?=(?:[^"]|"[^"]*")*$)`, macro), regexp2.None)
-		query, err = regex.Replace(query, expanded, -1, -1)
+
+	type pair struct {
+		Macro    string
+		Expanded string
+	}
+
+	var slice []pair
+	for k, v := range macros {
+		slice = append(slice, pair{k, v})
+	}
+
+	sort.Slice(slice, func(i, j int) bool {
+		return len(slice[i].Macro) > len(slice[j].Macro)
+	})
+
+	for _, pair := range slice {
+		regex := regexp2.MustCompile(fmt.Sprintf(`(%s)(?=(?:[^"]|"[^"]*")*$)`, pair.Macro), regexp2.None)
+		query, err = regex.Replace(query, pair.Expanded, -1, -1)
 		if err != nil {
 			return query, err
 		}
