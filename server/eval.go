@@ -172,15 +172,21 @@ func datetime(args ...interface{}) interface{} {
 }
 
 func limit(args ...interface{}) interface{} {
-	// Returns true no matter what. Evaluated compile-time,
+	// Returns true no matter what. Evaluated on compile-time,
 	// limits the number of records returned as a result of the query.
 	return true
 }
 
 func rlimit(args ...interface{}) interface{} {
-	// Returns true no matter what. Evaluated compile-time,
+	// Returns true no matter what. Evaluated on compile-time,
 	// limits the number of records returned as a result of the query in reverse
 	// but in a weird way such that it limits the past.
+	return true
+}
+
+func leftOff(args ...interface{}) interface{} {
+	// Returns true no matter what. Evaluated on compile-time,
+	// starts the query from given index.
 	return true
 }
 
@@ -192,6 +198,7 @@ var helpers = map[string]interface{}{
 	"datetime":   datetime,
 	"limit":      limit,
 	"rlimit":     rlimit,
+	"leftOff":    leftOff,
 }
 
 // Iterates and evaulates each parameter of a given function call

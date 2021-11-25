@@ -139,15 +139,17 @@ func TestServerProtocolInsertMode(t *testing.T) {
 }
 
 var testServerProtocolQueryModeData = []struct {
-	query  string
-	limit  int
-	rlimit int
+	query   string
+	limit   int
+	rlimit  int
+	leftOff int
 }{
-	{`brand.name == "Chevrolet"`, 100, 100},
-	{`brand.name == "Chevrolet" and limit(10)`, 10, 100},
-	{`limit(10) and brand.name == "Chevrolet"`, 10, 100},
-	{`brand.name == "Chevrolet" and rlimit(10)`, 10, 10},
-	{`rlimit(10) and brand.name == "Chevrolet"`, 10, 10},
+	{`brand.name == "Chevrolet"`, 100, 100, 0},
+	{`brand.name == "Chevrolet" and limit(10)`, 10, 100, 0},
+	{`limit(10) and brand.name == "Chevrolet"`, 10, 100, 0},
+	{`brand.name == "Chevrolet" and rlimit(10)`, 10, 10, 0},
+	{`rlimit(10) and brand.name == "Chevrolet"`, 10, 10, 0},
+	{`leftOff(60) and brand.name == "Chevrolet"`, 40, 100, 60},
 }
 
 func TestServerProtocolQueryMode(t *testing.T) {
@@ -172,7 +174,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 
 		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
 			defer wg.Done()
-			index := total - row.rlimit
+			index := total - row.rlimit + row.leftOff
 			for {
 				scanner := bufio.NewScanner(conn)
 

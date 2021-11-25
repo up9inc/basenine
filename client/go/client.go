@@ -23,6 +23,7 @@ type Metadata struct {
 	Current         uint64 `json:"current"`
 	Total           uint64 `json:"total"`
 	NumberOfWritten uint64 `json:"numberOfWritten"`
+	LeftOff         uint64 `json:"leftOff"`
 }
 
 // Commands refers to TCP connection modes.

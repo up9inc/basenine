@@ -143,6 +143,7 @@ type Metadata struct {
 	Current         uint64 `json:"current"`
 	Total           uint64 `json:"total"`
 	NumberOfWritten uint64 `json:"numberOfWritten"`
+	LeftOff         uint64 `json:"leftOff"`
 }
 
 // Closing indicators
@@ -662,15 +663,25 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		conn.Close()
 	}
 
-	// Do compile-time evaluations.
-	limit, rlimit, err := Precompute(expr)
+	// leftOff is the state to track the last offset's index in cs.offsets
+	// default value of leftOff is 0. leftOff(..) helper overrides it.
+	// can be -1 also, means that it's last record.
+	limit, rlimit, leftOff, err := Precompute(expr)
 	check(err)
+
+	// If leftOff value is -1 then set it to last offset
+	if leftOff < 0 {
+		cs.RLock()
+		lastOffset := len(cs.offsets) - 1
+		cs.RUnlock()
+		leftOff = int64(lastOffset)
+		if leftOff < 0 {
+			leftOff = 0
+		}
+	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
-
-	// The state to track the last offset's index in cs.offsets
-	var leftOff int64 = 0
 
 	// The queues for rlimit helper.
 	var rlimitOffsetQueue []int64
@@ -803,6 +814,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				NumberOfWritten: numberOfWritten,
 				Current:         uint64(realCurrent),
 				Total:           uint64(realTotal),
+				LeftOff:         uint64(leftOff),
 			})
 
 			if realTotal < 100 || int(realCurrent)%(realTotal/100) == 0 {
