@@ -685,14 +685,8 @@ func prepareQuery(conn net.Conn, query string) (expr *Expression, limit uint64, 
 	return
 }
 
-// streamRecords is an infinite loop that only called in case of QUERY TCP connection mode.
-// It expands marcros, parses the given query, does compile-time evaluations with Precompute() call
-// and filters out the records according to query.
-// It starts from the very beginning of the first living database partition.
-// Means that either the current partition or the partition before that.
-func streamRecords(conn net.Conn, data []byte) (err error) {
-	expr, limit, rlimit, leftOff, err := prepareQuery(conn, string(data))
-
+// handleNegativeLeftOff handles negative leftOff value.
+func handleNegativeLeftOff(leftOff int64) int64 {
 	// If leftOff value is -1 then set it to last offset
 	if leftOff < 0 {
 		cs.RLock()
@@ -703,6 +697,19 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			leftOff = 0
 		}
 	}
+
+	return leftOff
+}
+
+// streamRecords is an infinite loop that only called in case of QUERY TCP connection mode.
+// It expands marcros, parses the given query, does compile-time evaluations with Precompute() call
+// and filters out the records according to query.
+// It starts from the very beginning of the first living database partition.
+// Means that either the current partition or the partition before that.
+func streamRecords(conn net.Conn, data []byte) (err error) {
+	expr, limit, rlimit, leftOff, err := prepareQuery(conn, string(data))
+
+	leftOff = handleNegativeLeftOff(leftOff)
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
@@ -959,7 +966,7 @@ func ReverseSlice(s interface{}) {
 // fetch defines a macro that will be expanded for each individual query.
 func fetch(conn net.Conn, args []string) {
 	// Parse the arguments
-	leftOff, err := strconv.Atoi(args[0])
+	_leftOff, err := strconv.Atoi(args[0])
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the index to integer: %s\n", err.Error())))
 		return
@@ -976,13 +983,16 @@ func fetch(conn net.Conn, args []string) {
 		return
 	}
 
+	leftOff := int64(_leftOff)
+	leftOff = handleNegativeLeftOff(leftOff)
+
 	// Safely access the length of offsets slice.
 	cs.RLock()
 	l := len(cs.offsets)
 	cs.RUnlock()
 
 	// Check if the leftOff is in the offsets slice.
-	if leftOff >= l {
+	if int(leftOff) >= l {
 		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", leftOff)))
 		return
 	}
