@@ -50,6 +50,9 @@ The server also streams the query progress through `/metadata` command to the cl
 
 - **Single mode** is a short lasting TCP connection that returns a single record from the database based on the provided index value.
 
+- **Fetch mode** is a short lasting TCP connection mode for fetching N number of records from the database,
+starting from a certain offset, supporting both directions.
+
 - **Validate mode** checks the query against syntax errors. Returns the error if it's syntactically invalid otherwise returns `OK`.
 
 - **Macro mode** let's you define a macro for the query language like `http~proto.name == "http"`.
@@ -98,6 +101,18 @@ Single:
 ```go
 // Retrieve the record with ID equals to 42
 data, err := Single("localhost", "9099", 42)
+if err != nil {
+    panic(err)
+}
+```
+
+Fetch:
+
+```go
+// Retrieve up to 20 records starting from offset 100, in reverse direction (-1),
+// with query `brand.name == "Chevrolet"` and with a 5 seconds timeout.
+// Returns a slice of records and the latest meta state.
+data, meta, err := Fetch("localhost", "9099", 100, -1 `brand.name == "Chevrolet"`, 20, 5*time.Second)
 if err != nil {
     panic(err)
 }
