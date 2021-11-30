@@ -28,7 +28,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -954,13 +953,12 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	return
 }
 
-// Reverses a slice. panics if s is not a slice
-func ReverseSlice(s interface{}) {
-	size := reflect.ValueOf(s).Len()
-	swap := reflect.Swapper(s)
-	for i, j := 0, size-1; i < j; i, j = i+1, j-1 {
-		swap(i, j)
+// Reverses an int64 slice.
+func ReverseSlice(arr []int64) (newArr []int64) {
+	for i := len(arr) - 1; i >= 0; i-- {
+		newArr = append(newArr, arr[i])
 	}
+	return newArr
 }
 
 // fetch defines a macro that will be expanded for each individual query.
@@ -1040,7 +1038,7 @@ func fetch(conn net.Conn, args []string) {
 	})
 
 	if direction < 0 {
-		ReverseSlice(subOffsets)
+		subOffsets = ReverseSlice(subOffsets)
 	}
 
 	// Iterate through the next part of the offsets
