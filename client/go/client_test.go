@@ -139,8 +139,10 @@ func TestQuery(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
-	data, err := Fetch(HOST, PORT, 100, -1, `chevy`, 20, 5*time.Second)
+	data, meta, err := Fetch(HOST, PORT, 100, -1, `chevy`, 20, 5*time.Second)
 	assert.Nil(t, err)
+
+	assert.Equal(t, `{"current":81,"total":15000,"numberOfWritten":19,"leftOff":81}`, string(meta))
 
 	i := 0
 	for id := 100; id > 80; id-- {

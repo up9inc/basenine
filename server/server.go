@@ -987,6 +987,7 @@ func fetch(conn net.Conn, args []string) {
 		return
 	}
 
+	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
 	expr, _, _, _, err := prepareQuery(conn, query)
 
 	// Number of written records to the TCP connection.
@@ -1007,7 +1008,9 @@ func fetch(conn net.Conn, args []string) {
 	// Safely access the next part of offsets and partition references.
 	var subOffsets []int64
 	var subPartitionRefs []int64
+	var totalNumberOfRecords int
 	cs.RLock()
+	totalNumberOfRecords = len(cs.offsets)
 	if direction < 0 {
 		subOffsets = cs.offsets[:leftOff+1]
 		subPartitionRefs = cs.partitionRefs[:leftOff+1]
@@ -1016,6 +1019,15 @@ func fetch(conn net.Conn, args []string) {
 		subPartitionRefs = cs.partitionRefs[leftOff:]
 	}
 	cs.RUnlock()
+
+	var metadata []byte
+
+	metadata, _ = json.Marshal(Metadata{
+		NumberOfWritten: numberOfWritten,
+		Current:         uint64(leftOff),
+		Total:           uint64(totalNumberOfRecords),
+		LeftOff:         uint64(leftOff),
+	})
 
 	if direction < 0 {
 		ReverseSlice(subOffsets)
@@ -1082,6 +1094,19 @@ func fetch(conn net.Conn, args []string) {
 				break
 			}
 			numberOfWritten++
+		}
+
+		metadata, _ = json.Marshal(Metadata{
+			NumberOfWritten: numberOfWritten,
+			Current:         uint64(leftOff),
+			Total:           uint64(totalNumberOfRecords),
+			LeftOff:         uint64(leftOff),
+		})
+
+		_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
+		if err != nil {
+			log.Printf("Write error: %v\n", err)
+			break
 		}
 	}
 }

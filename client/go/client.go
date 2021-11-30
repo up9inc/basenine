@@ -113,17 +113,18 @@ func Single(host string, port string, id int) (data []byte, err error) {
 	return
 }
 
-func Fetch(host string, port string, leftOff int, direction int, query string, limit int, timeout time.Duration) (data [][]byte, err error) {
+func Fetch(host string, port string, leftOff int, direction int, query string, limit int, timeout time.Duration) (data [][]byte, meta []byte, err error) {
 	var c *Connection
 	c, err = NewConnection(host, port)
 	if err != nil {
 		return
 	}
 
-	ret := make(chan []byte)
+	dataChan := make(chan []byte)
+	metaChan := make(chan []byte)
 
 	var wg sync.WaitGroup
-	go readConnection(&wg, c, ret, nil)
+	go readConnection(&wg, c, dataChan, metaChan)
 	wg.Add(1)
 
 	c.SendText(CMD_FETCH)
@@ -136,13 +137,14 @@ func Fetch(host string, port string, leftOff int, direction int, query string, l
 	counter := 0
 	for {
 		select {
-		case record := <-ret:
+		case record := <-dataChan:
 			data = append(data, record)
 			counter++
 			if counter >= limit {
 				c.Close()
 				return
 			}
+		case meta = <-metaChan:
 		case <-afterCh:
 			c.Close()
 			return

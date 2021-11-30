@@ -111,8 +111,8 @@ Fetch:
 ```go
 // Retrieve up to 20 records starting from offset 100, in reverse direction (-1),
 // with query `brand.name == "Chevrolet"` and with a 5 seconds timeout.
-// Returns a slice of bytes.
-data, err := Fetch("localhost", "9099", 100, -1 `brand.name == "Chevrolet"`, 20, 5*time.Second)
+// Returns a slice of records and the latest meta state.
+data, meta, err := Fetch("localhost", "9099", 100, -1 `brand.name == "Chevrolet"`, 20, 5*time.Second)
 if err != nil {
     panic(err)
 }
