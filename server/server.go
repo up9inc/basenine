@@ -58,6 +58,9 @@ type ConnectionMode int
 //
 // SINGLE is a short lasting TCP connection mode for fetching a single record from the database.
 //
+// FETCH is a short lasting TCP connection mode for fetching N number of records from the database,
+// starting from a certain offset, supporting both directions.
+//
 // VALIDATE is a short lasting TCP connection mode for validating a query against syntax errors.
 //
 // MACRO is short lasting TCP connection mode for setting a macro that will be expanded
@@ -970,6 +973,17 @@ func fetch(conn net.Conn, args []string) {
 	limit, err := strconv.Atoi(args[3])
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the limit to integer: %s\n", err.Error())))
+		return
+	}
+
+	// Safely access the length of offsets slice.
+	cs.RLock()
+	l := len(cs.offsets)
+	cs.RUnlock()
+
+	// Check if the leftOff is in the offsets slice.
+	if leftOff >= l {
+		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", leftOff)))
 		return
 	}
 

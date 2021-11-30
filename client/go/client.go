@@ -31,6 +31,7 @@ const (
 	CMD_INSERT   string = "/insert"
 	CMD_QUERY    string = "/query"
 	CMD_SINGLE   string = "/single"
+	CMD_FETCH    string = "/fetch"
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
 	CMD_LIMIT    string = "/limit"
@@ -110,6 +111,43 @@ func Single(host string, port string, id int) (data []byte, err error) {
 	data = <-ret
 	c.Close()
 	return
+}
+
+func Fetch(host string, port string, leftOff int, direction int, query string, limit int, timeout time.Duration) (data [][]byte, err error) {
+	var c *Connection
+	c, err = NewConnection(host, port)
+	if err != nil {
+		return
+	}
+
+	ret := make(chan []byte)
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, c, ret, nil)
+	wg.Add(1)
+
+	c.SendText(CMD_FETCH)
+	c.SendText(fmt.Sprintf("%d", leftOff))
+	c.SendText(fmt.Sprintf("%d", direction))
+	c.SendText(fmt.Sprintf("%s", query))
+	c.SendText(fmt.Sprintf("%d", limit))
+
+	afterCh := time.After(timeout)
+	counter := 0
+	for {
+		select {
+		case record := <-ret:
+			data = append(data, record)
+			counter++
+			if counter >= limit {
+				c.Close()
+				return
+			}
+		case <-afterCh:
+			c.Close()
+			return
+		}
+	}
 }
 
 // Validate validates the given query against syntax errors by passing the query

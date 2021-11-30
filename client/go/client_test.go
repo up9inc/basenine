@@ -138,6 +138,18 @@ func TestQuery(t *testing.T) {
 	}
 }
 
+func TestFetch(t *testing.T) {
+	data, err := Fetch(HOST, PORT, 100, -1, `chevy`, 20, 5*time.Second)
+	assert.Nil(t, err)
+
+	i := 0
+	for id := 100; id > 80; id-- {
+		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
+		assert.Equal(t, expected, string(data[i]))
+		i++
+	}
+}
+
 func TestTCPConnectionLeak(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		err := Validate(HOST, PORT, `brand.name == "Chevrolet"`)
