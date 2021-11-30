@@ -425,6 +425,108 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	}
 }
 
+var testServerProtocolFetchModeData = []struct {
+	leftOff   int
+	direction int
+	query     string
+	limit     int
+	expected  int
+}{
+	{0, 1, `brand.name == "Chevrolet"`, 5, 5},
+	{13, 1, `brand.name == "Chevrolet"`, 5, 5},
+	{13, 1, `brand.name == "Chevrolet"`, 200, 87},
+	{93, 1, `brand.name == "Chevrolet"`, 20, 7},
+	{99, -1, `brand.name == "Chevrolet"`, 5, 5},
+	{13, -1, `brand.name == "Chevrolet"`, 5, 5},
+	{13, -1, `brand.name == "Chevrolet"`, 200, 13},
+	{93, -1, `brand.name == "Chevrolet"`, 20, 20},
+}
+
+func TestServerProtocolFetchMode(t *testing.T) {
+	for _, row := range testServerProtocolFetchModeData {
+		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+
+		cs = ConcurrentSlice{
+			partitionIndex: -1,
+		}
+
+		server, client := net.Pipe()
+		go handleConnection(server)
+
+		f := newPartition()
+		assert.NotNil(t, f)
+
+		total := 100
+
+		for index := 0; index < total; index++ {
+			insertData([]byte(payload))
+		}
+
+		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+			defer wg.Done()
+			index := row.leftOff
+			counter := 0
+			for {
+				scanner := bufio.NewScanner(conn)
+
+				for {
+					ok := scanner.Scan()
+					bytes := scanner.Bytes()
+
+					command := handleCommands(bytes)
+					if command {
+						break
+					}
+
+					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+					if row.direction < 0 {
+						index--
+					} else {
+						index++
+					}
+					assert.Equal(t, expected, string(bytes))
+
+					counter++
+
+					if counter >= row.expected {
+						return
+					}
+
+					assert.True(t, ok)
+				}
+			}
+		}
+
+		var wg sync.WaitGroup
+		go readConnection(&wg, client)
+		wg.Add(1)
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte("/fetch\n"))
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%d\n", row.leftOff)))
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%d\n", row.direction)))
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%d\n", row.limit)))
+
+		if waitTimeout(&wg, 10*time.Second) {
+			t.Fatal("Timed out waiting for wait group")
+		} else {
+			client.Close()
+			server.Close()
+
+			removeDatabaseFiles()
+		}
+	}
+}
+
 func TestServerProtocolLimitMode(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	limit := int64(1000000) // 1MB

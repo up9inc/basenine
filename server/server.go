@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,6 +70,7 @@ const (
 	INSERT
 	QUERY
 	SINGLE
+	FETCH
 	VALIDATE
 	MACRO
 	LIMIT
@@ -81,6 +83,7 @@ const (
 	CMD_INSERT   string = "/insert"
 	CMD_QUERY    string = "/query"
 	CMD_SINGLE   string = "/single"
+	CMD_FETCH    string = "/fetch"
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
 	CMD_LIMIT    string = "/limit"
@@ -409,6 +412,9 @@ func handleConnection(conn net.Conn) {
 	// Set connection mode to NONE
 	var mode ConnectionMode = NONE
 
+	// Arguments for the FETCH command (leftOff, direction, query, limit)
+	var fetchArgs []string
+
 	for {
 		// Scan the input
 		ok := scanner.Scan()
@@ -444,6 +450,13 @@ func handleConnection(conn net.Conn) {
 			streamRecords(conn, data)
 		case SINGLE:
 			retrieveSingle(conn, data)
+		case FETCH:
+			if len(fetchArgs) < 4 {
+				fetchArgs = append(fetchArgs, string(data))
+			}
+			if len(fetchArgs) == 4 {
+				fetch(conn, fetchArgs)
+			}
 		case VALIDATE:
 			validateQuery(conn, data)
 		case MACRO:
@@ -485,6 +498,9 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 
 		case message == CMD_SINGLE:
 			mode = SINGLE
+
+		case message == CMD_FETCH:
+			mode = FETCH
 
 		case strings.HasPrefix(message, CMD_VALIDATE):
 			mode = VALIDATE
@@ -644,20 +660,14 @@ func watchPartitions() (err error) {
 	return
 }
 
-// streamRecords is an infinite loop that only called in case of QUERY TCP connection mode.
-// It expands marcros, parses the given query, does compile-time evaluations with Precompute() call
-// and filters out the records according to query.
-// It starts from the very beginning of the first living database partition.
-// Means that either the current partition or the partition before that.
-func streamRecords(conn net.Conn, data []byte) (err error) {
-	query := string(data)
-
+// prepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
+func prepareQuery(conn net.Conn, query string) (expr *Expression, limit uint64, rlimit uint64, leftOff int64, err error) {
 	// Expand all macros in the query, if there are any.
 	query, err = expandMacros(query)
 	check(err)
 
 	// Parse the query.
-	expr, err := Parse(query)
+	expr, err = Parse(query)
 	if err != nil {
 		log.Printf("Syntax error: %v\n", err)
 		conn.Close()
@@ -666,8 +676,19 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	// leftOff is the state to track the last offset's index in cs.offsets
 	// default value of leftOff is 0. leftOff(..) helper overrides it.
 	// can be -1 also, means that it's last record.
-	limit, rlimit, leftOff, err := Precompute(expr)
+	limit, rlimit, leftOff, err = Precompute(expr)
 	check(err)
+
+	return
+}
+
+// streamRecords is an infinite loop that only called in case of QUERY TCP connection mode.
+// It expands marcros, parses the given query, does compile-time evaluations with Precompute() call
+// and filters out the records according to query.
+// It starts from the very beginning of the first living database partition.
+// Means that either the current partition or the partition before that.
+func streamRecords(conn net.Conn, data []byte) (err error) {
+	expr, limit, rlimit, leftOff, err := prepareQuery(conn, string(data))
 
 	// If leftOff value is -1 then set it to last offset
 	if leftOff < 0 {
@@ -921,6 +942,134 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	f.Close()
 	conn.Write([]byte(fmt.Sprintf("%s\n", b)))
 	return
+}
+
+// Reverses a slice. panics if s is not a slice
+func ReverseSlice(s interface{}) {
+	size := reflect.ValueOf(s).Len()
+	swap := reflect.Swapper(s)
+	for i, j := 0, size-1; i < j; i, j = i+1, j-1 {
+		swap(i, j)
+	}
+}
+
+// fetch defines a macro that will be expanded for each individual query.
+func fetch(conn net.Conn, args []string) {
+	// Parse the arguments
+	leftOff, err := strconv.Atoi(args[0])
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("Error: While converting the index to integer: %s\n", err.Error())))
+		return
+	}
+	direction, err := strconv.Atoi(args[1])
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("Error: While converting the direction to integer: %s\n", err.Error())))
+		return
+	}
+	query := args[2]
+	limit, err := strconv.Atoi(args[3])
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("Error: While converting the limit to integer: %s\n", err.Error())))
+		return
+	}
+
+	expr, _, _, _, err := prepareQuery(conn, query)
+
+	// Number of written records to the TCP connection.
+	var numberOfWritten uint64 = 0
+
+	// f is the current partition we're reading the data from.
+	var f *os.File
+
+	err = connCheck(conn)
+	if err != nil {
+		// Connection was closed by the peer, close the current partition.
+		if f != nil {
+			f.Close()
+		}
+		return
+	}
+
+	// Safely access the next part of offsets and partition references.
+	var subOffsets []int64
+	var subPartitionRefs []int64
+	cs.RLock()
+	if direction < 0 {
+		subOffsets = cs.offsets[:leftOff+1]
+		subPartitionRefs = cs.partitionRefs[:leftOff+1]
+	} else {
+		subOffsets = cs.offsets[leftOff:]
+		subPartitionRefs = cs.partitionRefs[leftOff:]
+	}
+	cs.RUnlock()
+
+	if direction < 0 {
+		ReverseSlice(subOffsets)
+	}
+
+	// Iterate through the next part of the offsets
+	for i, offset := range subOffsets {
+		if int(numberOfWritten) >= limit {
+			return
+		}
+
+		if direction < 0 {
+			leftOff--
+		} else {
+			leftOff++
+		}
+
+		// Safely access the *os.File pointer that the current offset refers to.
+		var partitionRef int64
+		cs.RLock()
+		partitionRef = subPartitionRefs[i]
+		fRef := cs.partitions[partitionRef]
+		cs.RUnlock()
+
+		// f == nil means we didn't open any partition yet.
+		// fRef.Name() != f.Name() means we're switching to the next partition.
+		if f == nil || fRef.Name() != f.Name() {
+			if f != nil && fRef.Name() != f.Name() {
+				// We're switching to the next partition, close the current partition.
+				f.Close()
+			}
+
+			// Open the partition that the current offset refers to.
+			f, err = os.Open(fRef.Name())
+
+			// If the file cannot be opened, pass.
+			if err != nil {
+				continue
+			}
+		}
+
+		// Seek to the offset
+		f.Seek(offset, io.SeekStart)
+
+		// Read the record into b
+		var b []byte
+		b, _, err = readRecord(f, offset)
+
+		// Even if it's EOF, continue.
+		// Because a later offset might point to a previous region of the file.
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			continue
+		}
+
+		// Evaluate the current record against the given query.
+		truth, err := Eval(expr, string(b))
+		check(err)
+
+		// Write the record into TCP connection if it passes the query.
+		if truth {
+			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+			if err != nil {
+				log.Printf("Write error: %v\n", err)
+				break
+			}
+			numberOfWritten++
+		}
+	}
 }
 
 // validateQuery tries to parse the given query and checks if there are
