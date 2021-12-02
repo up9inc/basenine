@@ -721,6 +721,9 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		rlimitPartitionRefQueue = make([]int64, 0)
 	}
 
+	// Number of queried records
+	var queried uint64 = 0
+
 	// removedCounter keeps track of how many offsets belong to a removed partition.
 	var removedOffsetsCounter int
 
@@ -749,19 +752,22 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			rlimit = 0
 		}
 
-		var metadata []byte
+		var metadata *Metadata
 
 		// Iterate through the next part of the offsets
 		for i, offset := range subOffsets {
 			leftOff++
+			queried++
 
 			// If the number of written records is greater than or equal to the limit
 			// and if the limit is not zero then stop the stream.
 			if limit != 0 && numberOfWritten >= limit {
+				metadata.Current = 0
+				metadataMarshaled, _ := json.Marshal(metadata)
 				// Do meta periodic update for 3 seconds in case of `limit` helper
 				for i := 0; i < 6; i++ {
-					if len(metadata) > 0 {
-						_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
+					if len(metadataMarshaled) > 0 {
+						_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadataMarshaled))))
 						if err != nil {
 							log.Printf("Write error: %v\n", err)
 						}
@@ -840,15 +846,17 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			realCurrent := leftOff - int64(removedOffsetsCounter)
 			realTotal := totalNumberOfRecords - removedOffsetsCounter
 
-			metadata, _ = json.Marshal(Metadata{
+			metadata = &Metadata{
 				NumberOfWritten: numberOfWritten,
-				Current:         uint64(realCurrent),
+				Current:         uint64(queried),
 				Total:           uint64(realTotal),
 				LeftOff:         uint64(leftOff),
-			})
+			}
+			queried = 0
 
 			if realTotal < 100 || int(realCurrent)%(realTotal/100) == 0 {
-				_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
+				metadataMarshaled, _ := json.Marshal(metadata)
+				_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadataMarshaled))))
 				if err != nil {
 					log.Printf("Write error: %v\n", err)
 					break
@@ -866,27 +874,31 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		// the client for each 0.5 seconds until a partition is modified. Means that
 		// it continues until a new data is inserted into the database.
 		stopMetaPeriodicUpdate := false
-		go func() {
-			for {
-				if stopMetaPeriodicUpdate {
-					break
-				}
-				if len(metadata) > 0 {
-					_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))
-					if err != nil {
-						log.Printf("Write error: %v\n", err)
-						break
-					}
-
+		if metadata != nil {
+			metadata.Current = 0
+			metadataMarshaled, _ := json.Marshal(metadata)
+			go func() {
+				for {
 					if stopMetaPeriodicUpdate {
 						break
 					}
-				} else {
-					break
+					if len(metadataMarshaled) > 0 {
+						_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadataMarshaled))))
+						if err != nil {
+							log.Printf("Write error: %v\n", err)
+							break
+						}
+
+						if stopMetaPeriodicUpdate {
+							break
+						}
+					} else {
+						break
+					}
+					time.Sleep(500 * time.Millisecond)
 				}
-				time.Sleep(500 * time.Millisecond)
-			}
-		}()
+			}()
+		}
 
 		// Block until a partition is modified
 		watchPartitions()
@@ -1031,9 +1043,12 @@ func fetch(conn net.Conn, args []string) {
 
 	var metadata []byte
 
+	// Number of queried records
+	var queried uint64 = 0
+
 	metadata, _ = json.Marshal(Metadata{
 		NumberOfWritten: numberOfWritten,
-		Current:         uint64(leftOff),
+		Current:         uint64(queried),
 		Total:           uint64(totalNumberOfRecords),
 		LeftOff:         uint64(leftOff),
 	})
@@ -1053,6 +1068,12 @@ func fetch(conn net.Conn, args []string) {
 		} else {
 			leftOff++
 		}
+
+		if leftOff < 0 {
+			leftOff = 0
+		}
+
+		queried++
 
 		// Safely access the *os.File pointer that the current offset refers to.
 		var partitionRef int64
@@ -1107,7 +1128,7 @@ func fetch(conn net.Conn, args []string) {
 
 		metadata, _ = json.Marshal(Metadata{
 			NumberOfWritten: numberOfWritten,
-			Current:         uint64(leftOff),
+			Current:         uint64(queried),
 			Total:           uint64(totalNumberOfRecords),
 			LeftOff:         uint64(leftOff),
 		})
