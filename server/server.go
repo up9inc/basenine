@@ -1033,8 +1033,8 @@ func fetch(conn net.Conn, args []string) {
 	cs.RLock()
 	totalNumberOfRecords = len(cs.offsets)
 	if direction < 0 {
-		subOffsets = cs.offsets[:leftOff+1]
-		subPartitionRefs = cs.partitionRefs[:leftOff+1]
+		subOffsets = cs.offsets[:leftOff-1]
+		subPartitionRefs = cs.partitionRefs[:leftOff-1]
 	} else {
 		subOffsets = cs.offsets[leftOff:]
 		subPartitionRefs = cs.partitionRefs[leftOff:]
@@ -1055,6 +1055,7 @@ func fetch(conn net.Conn, args []string) {
 
 	if direction < 0 {
 		subOffsets = ReverseSlice(subOffsets)
+		subPartitionRefs = ReverseSlice(subPartitionRefs)
 	}
 
 	// Iterate through the next part of the offsets
@@ -1081,6 +1082,11 @@ func fetch(conn net.Conn, args []string) {
 		partitionRef = subPartitionRefs[i]
 		fRef := cs.partitions[partitionRef]
 		cs.RUnlock()
+
+		// File descriptor nil means; the partition is removed. So we pass this offset.
+		if fRef == nil {
+			continue
+		}
 
 		// f == nil means we didn't open any partition yet.
 		// fRef.Name() != f.Name() means we're switching to the next partition.

@@ -138,7 +138,7 @@ func Fetch(host string, port string, leftOff int, direction int, query string, l
 	for {
 		select {
 		case record := <-dataChan:
-			data = append(data, record)
+			data = append([][]byte{record}, data...)
 			counter++
 			if counter >= limit {
 				c.Close()
