@@ -843,14 +843,14 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 
 			// Correct the metadata values by subtracting removedOffsetsCounter
-			realCurrent := leftOff - int64(removedOffsetsCounter)
+			realCurrent := leftOff - 1 - int64(removedOffsetsCounter)
 			realTotal := totalNumberOfRecords - removedOffsetsCounter
 
 			metadata = &Metadata{
 				NumberOfWritten: numberOfWritten,
 				Current:         uint64(queried),
 				Total:           uint64(realTotal),
-				LeftOff:         uint64(leftOff),
+				LeftOff:         uint64(leftOff - 1),
 			}
 			queried = 0
 
@@ -938,7 +938,7 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	cs.RUnlock()
 
 	// Check if the index is in the offsets slice.
-	if index >= l {
+	if index > l {
 		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", index)))
 		return
 	}
@@ -1003,7 +1003,7 @@ func fetch(conn net.Conn, args []string) {
 	cs.RUnlock()
 
 	// Check if the leftOff is in the offsets slice.
-	if int(leftOff) >= l {
+	if int(leftOff) > l {
 		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", leftOff)))
 		return
 	}
