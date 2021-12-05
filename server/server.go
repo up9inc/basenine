@@ -843,14 +843,14 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 
 			// Correct the metadata values by subtracting removedOffsetsCounter
-			realCurrent := leftOff - 1 - int64(removedOffsetsCounter)
+			realCurrent := leftOff - int64(removedOffsetsCounter)
 			realTotal := totalNumberOfRecords - removedOffsetsCounter
 
 			metadata = &Metadata{
 				NumberOfWritten: numberOfWritten,
 				Current:         uint64(queried),
 				Total:           uint64(realTotal),
-				LeftOff:         uint64(leftOff - 1),
+				LeftOff:         uint64(leftOff),
 			}
 			queried = 0
 
