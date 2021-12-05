@@ -1033,8 +1033,8 @@ func fetch(conn net.Conn, args []string) {
 	cs.RLock()
 	totalNumberOfRecords = len(cs.offsets)
 	if direction < 0 {
-		subOffsets = cs.offsets[:leftOff-1]
-		subPartitionRefs = cs.partitionRefs[:leftOff-1]
+		subOffsets = cs.offsets[:leftOff+1]
+		subPartitionRefs = cs.partitionRefs[:leftOff+1]
 	} else {
 		subOffsets = cs.offsets[leftOff:]
 		subPartitionRefs = cs.partitionRefs[leftOff:]
@@ -1122,16 +1122,6 @@ func fetch(conn net.Conn, args []string) {
 		truth, err := Eval(expr, string(b))
 		check(err)
 
-		// Write the record into TCP connection if it passes the query.
-		if truth {
-			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
-			if err != nil {
-				log.Printf("Write error: %v\n", err)
-				break
-			}
-			numberOfWritten++
-		}
-
 		metadata, _ = json.Marshal(Metadata{
 			NumberOfWritten: numberOfWritten,
 			Current:         uint64(queried),
@@ -1143,6 +1133,16 @@ func fetch(conn net.Conn, args []string) {
 		if err != nil {
 			log.Printf("Write error: %v\n", err)
 			break
+		}
+
+		// Write the record into TCP connection if it passes the query.
+		if truth {
+			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+			if err != nil {
+				log.Printf("Write error: %v\n", err)
+				break
+			}
+			numberOfWritten++
 		}
 	}
 }
