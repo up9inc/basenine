@@ -759,26 +759,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			leftOff++
 			queried++
 
-			// If the number of written records is greater than or equal to the limit
-			// and if the limit is not zero then stop the stream.
-			if limit != 0 && numberOfWritten >= limit {
-				metadata.Current = 0
-				metadataMarshaled, _ := json.Marshal(metadata)
-				// Do meta periodic update for 3 seconds in case of `limit` helper
-				for i := 0; i < 6; i++ {
-					if len(metadataMarshaled) > 0 {
-						_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadataMarshaled))))
-						if err != nil {
-							log.Printf("Write error: %v\n", err)
-						}
-					} else {
-						break
-					}
-					time.Sleep(500 * time.Millisecond)
-				}
-				return
-			}
-
 			// Safely access the *os.File pointer that the current offset refers to.
 			var partitionRef int64
 			cs.RLock()
@@ -843,7 +823,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 
 			// Correct the metadata values by subtracting removedOffsetsCounter
-			realCurrent := leftOff - int64(removedOffsetsCounter)
 			realTotal := totalNumberOfRecords - removedOffsetsCounter
 
 			metadata = &Metadata{
@@ -854,13 +833,17 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 			queried = 0
 
-			if realTotal < 100 || int(realCurrent)%(realTotal/100) == 0 {
-				metadataMarshaled, _ := json.Marshal(metadata)
-				_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadataMarshaled))))
-				if err != nil {
-					log.Printf("Write error: %v\n", err)
-					break
-				}
+			metadataMarshaled, _ := json.Marshal(metadata)
+			_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadataMarshaled))))
+			if err != nil {
+				log.Printf("Write error: %v\n", err)
+				break
+			}
+
+			// If the number of written records is greater than or equal to the limit
+			// and if the limit is not zero then stop the stream.
+			if limit != 0 && numberOfWritten >= limit {
+				return nil
 			}
 		}
 
@@ -869,42 +852,8 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			rlimit = 0
 		}
 
-		// Meta periodic update provides a way to synchronize desynced data and meta channels
-		// on clients in case of calm streams. Such that it sends a metadata update to
-		// the client for each 0.5 seconds until a partition is modified. Means that
-		// it continues until a new data is inserted into the database.
-		stopMetaPeriodicUpdate := false
-		if metadata != nil {
-			metadata.Current = 0
-			metadataMarshaled, _ := json.Marshal(metadata)
-			go func() {
-				for {
-					if stopMetaPeriodicUpdate {
-						break
-					}
-					if len(metadataMarshaled) > 0 {
-						_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadataMarshaled))))
-						if err != nil {
-							log.Printf("Write error: %v\n", err)
-							break
-						}
-
-						if stopMetaPeriodicUpdate {
-							break
-						}
-					} else {
-						break
-					}
-					time.Sleep(500 * time.Millisecond)
-				}
-			}()
-		}
-
 		// Block until a partition is modified
 		watchPartitions()
-
-		// Stop the meta periodic update
-		stopMetaPeriodicUpdate = true
 	}
 }
 
@@ -1033,8 +982,8 @@ func fetch(conn net.Conn, args []string) {
 	cs.RLock()
 	totalNumberOfRecords = len(cs.offsets)
 	if direction < 0 {
-		subOffsets = cs.offsets[:leftOff+1]
-		subPartitionRefs = cs.partitionRefs[:leftOff+1]
+		subOffsets = cs.offsets[:leftOff]
+		subPartitionRefs = cs.partitionRefs[:leftOff]
 	} else {
 		subOffsets = cs.offsets[leftOff:]
 		subPartitionRefs = cs.partitionRefs[leftOff:]
