@@ -145,7 +145,7 @@ func TestFetch(t *testing.T) {
 	assert.Equal(t, `{"current":20,"total":15000,"numberOfWritten":19,"leftOff":80}`, string(meta))
 
 	i := 0
-	for id := 100; id > 80; id-- {
+	for id := 99; id > 80; id-- {
 		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
 		assert.Equal(t, expected, string(data[i]))
 		i++

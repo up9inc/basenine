@@ -465,6 +465,9 @@ func TestServerProtocolFetchMode(t *testing.T) {
 		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
 			defer wg.Done()
 			index := row.leftOff
+			if row.direction < 0 {
+				index--
+			}
 			counter := 0
 			for {
 				scanner := bufio.NewScanner(conn)
