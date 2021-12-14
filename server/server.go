@@ -1021,8 +1021,8 @@ func fetch(conn net.Conn, args []string) {
 	cs.RLock()
 	totalNumberOfRecords = len(cs.offsets)
 	if direction < 0 {
-		subOffsets = cs.offsets[:leftOff+1]
-		subPartitionRefs = cs.partitionRefs[:leftOff+1]
+		subOffsets = cs.offsets[:leftOff]
+		subPartitionRefs = cs.partitionRefs[:leftOff]
 	} else {
 		subOffsets = cs.offsets[leftOff:]
 		subPartitionRefs = cs.partitionRefs[leftOff:]
@@ -1031,15 +1031,19 @@ func fetch(conn net.Conn, args []string) {
 
 	var metadata []byte
 
+	// Number of queried records
+	var queried uint64 = 0
+
 	metadata, _ = json.Marshal(Metadata{
 		NumberOfWritten: numberOfWritten,
-		Current:         uint64(leftOff),
+		Current:         uint64(queried),
 		Total:           uint64(totalNumberOfRecords),
 		LeftOff:         uint64(leftOff),
 	})
 
 	if direction < 0 {
 		subOffsets = ReverseSlice(subOffsets)
+		subPartitionRefs = ReverseSlice(subPartitionRefs)
 	}
 
 	// Iterate through the next part of the offsets
@@ -1054,12 +1058,23 @@ func fetch(conn net.Conn, args []string) {
 			leftOff++
 		}
 
+		if leftOff < 0 {
+			leftOff = 0
+		}
+
+		queried++
+
 		// Safely access the *os.File pointer that the current offset refers to.
 		var partitionRef int64
 		cs.RLock()
 		partitionRef = subPartitionRefs[i]
 		fRef := cs.partitions[partitionRef]
 		cs.RUnlock()
+
+		// File descriptor nil means; the partition is removed. So we pass this offset.
+		if fRef == nil {
+			continue
+		}
 
 		// f == nil means we didn't open any partition yet.
 		// fRef.Name() != f.Name() means we're switching to the next partition.
@@ -1095,19 +1110,9 @@ func fetch(conn net.Conn, args []string) {
 		truth, err := Eval(expr, string(b))
 		check(err)
 
-		// Write the record into TCP connection if it passes the query.
-		if truth {
-			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
-			if err != nil {
-				log.Printf("Write error: %v\n", err)
-				break
-			}
-			numberOfWritten++
-		}
-
 		metadata, _ = json.Marshal(Metadata{
 			NumberOfWritten: numberOfWritten,
-			Current:         uint64(leftOff),
+			Current:         uint64(queried),
 			Total:           uint64(totalNumberOfRecords),
 			LeftOff:         uint64(leftOff),
 		})
@@ -1116,6 +1121,16 @@ func fetch(conn net.Conn, args []string) {
 		if err != nil {
 			log.Printf("Write error: %v\n", err)
 			break
+		}
+
+		// Write the record into TCP connection if it passes the query.
+		if truth {
+			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+			if err != nil {
+				log.Printf("Write error: %v\n", err)
+				break
+			}
+			numberOfWritten++
 		}
 	}
 }
