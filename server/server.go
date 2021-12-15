@@ -35,6 +35,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	jp "github.com/ohler55/ojg/jp"
+	oj "github.com/ohler55/ojg/oj"
 )
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
@@ -119,22 +121,26 @@ var cs ConcurrentSlice
 // partitionSizeLimit is the value of database partition size limit. 0 means unlimited size.
 type ConcurrentSlice struct {
 	sync.RWMutex
-	lastOffset         int64
-	partitionRefs      []int64
-	offsets            []int64
-	partitions         []*os.File
-	partitionIndex     int64
-	partitionSizeLimit int64
+	lastOffset            int64
+	partitionRefs         []int64
+	offsets               []int64
+	partitions            []*os.File
+	partitionIndex        int64
+	partitionSizeLimit    int64
+	truncatedTimestamp    int64
+	removedOffsetsCounter int
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
 type ConcurrentSliceExport struct {
-	LastOffset         int64
-	PartitionRefs      []int64
-	Offsets            []int64
-	PartitionPaths     []string
-	PartitionIndex     int64
-	PartitionSizeLimit int64
+	LastOffset            int64
+	PartitionRefs         []int64
+	Offsets               []int64
+	PartitionPaths        []string
+	PartitionIndex        int64
+	PartitionSizeLimit    int64
+	TruncatedTimestamp    int64
+	RemovedOffsetsCounter int
 }
 
 // Core dump filename
@@ -145,10 +151,11 @@ var watcher *fsnotify.Watcher
 
 // Metadata info that's streamed after each record
 type Metadata struct {
-	Current         uint64 `json:"current"`
-	Total           uint64 `json:"total"`
-	NumberOfWritten uint64 `json:"numberOfWritten"`
-	LeftOff         uint64 `json:"leftOff"`
+	Current            uint64 `json:"current"`
+	Total              uint64 `json:"total"`
+	NumberOfWritten    uint64 `json:"numberOfWritten"`
+	LeftOff            uint64 `json:"leftOff"`
+	TruncatedTimestamp int64  `json:"truncatedTimestamp"`
 }
 
 // Closing indicators
@@ -277,6 +284,8 @@ func dumpCore(silent bool, dontLock bool) {
 	}
 	csExport.PartitionIndex = cs.partitionIndex
 	csExport.PartitionSizeLimit = cs.partitionSizeLimit
+	csExport.TruncatedTimestamp = cs.truncatedTimestamp
+	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -326,6 +335,8 @@ func restoreCore() {
 	}
 	cs.partitionIndex = csExport.PartitionIndex
 	cs.partitionSizeLimit = csExport.PartitionSizeLimit
+	cs.truncatedTimestamp = csExport.TruncatedTimestamp
+	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 }
@@ -337,6 +348,62 @@ func removeDatabaseFiles() {
 	for _, f := range files {
 		os.Remove(f)
 	}
+}
+
+func getLastTimestampOfPartition(discardedPartitionIndex int64) (timestamp int64, err error) {
+	cs.RLock()
+	offsets := cs.offsets
+	partitionRefs := cs.partitionRefs
+	cs.RUnlock()
+
+	var prevIndex int
+	var removedOffsetsCounter int
+	for i := range offsets {
+		if partitionRefs[i] > discardedPartitionIndex {
+			break
+		}
+		prevIndex = i
+		removedOffsetsCounter++
+	}
+
+	cs.Lock()
+	cs.removedOffsetsCounter = removedOffsetsCounter
+	cs.Unlock()
+
+	var n int64
+	var f *os.File
+	n, f, err = getOffsetAndPartition(prevIndex)
+
+	if err != nil {
+		return
+	}
+
+	f.Seek(n, io.SeekStart)
+	var b []byte
+	b, _, err = readRecord(f, n)
+	f.Close()
+
+	var jsonPath jp.Expr
+	jsonPath, err = jp.ParseString(`timestamp`)
+
+	if err != nil {
+		return
+	}
+
+	obj, err := oj.ParseString(string(b))
+	if err != nil {
+		return
+	}
+
+	result := jsonPath.Get(obj)
+
+	if len(result) < 1 {
+		err = errors.New("JSONPath could not be found!")
+		return
+	}
+
+	timestamp = result[0].(int64)
+	return
 }
 
 // periodicPartitioner is a Goroutine that handles database parititioning according
@@ -372,8 +439,16 @@ func periodicPartitioner(ticker *time.Ticker) {
 			f = newPartition()
 
 			// Safely access the partitions slice and partitionIndex
-			cs.Lock()
 			if cs.partitionIndex > 1 {
+				// Populate the truncatedTimestamp field, which symbolizes the new
+				// recording start time
+				var truncatedTimestamp int64
+				truncatedTimestamp, err = getLastTimestampOfPartition(cs.partitionIndex - 2)
+				if err == nil {
+					cs.truncatedTimestamp = truncatedTimestamp + 1
+				}
+
+				cs.Lock()
 				// There can be only two living partition any given time.
 				// We've created the third partition, so discard the first one.
 				discarded := cs.partitions[cs.partitionIndex-2]
@@ -389,8 +464,8 @@ func periodicPartitioner(ticker *time.Ticker) {
 					// Dump the core in case of a partition removal
 					dumpCore(true, true)
 				}
+				cs.Unlock()
 			}
-			cs.Unlock()
 		}
 	}
 }
@@ -745,6 +820,8 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		subOffsets := cs.offsets[leftOff:]
 		subPartitionRefs := cs.partitionRefs[leftOff:]
 		totalNumberOfRecords := len(cs.offsets)
+		truncatedTimestamp := cs.truncatedTimestamp
+		removedOffsetsCounter = cs.removedOffsetsCounter
 		cs.RUnlock()
 
 		// Disable rlimit if it's bigger than the total records.
@@ -765,11 +842,11 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			partitionRef = subPartitionRefs[i]
 			fRef := cs.partitions[partitionRef]
 			totalNumberOfRecords = len(cs.offsets)
+			truncatedTimestamp = cs.truncatedTimestamp
 			cs.RUnlock()
 
 			// File descriptor nil means; the partition is removed. So we pass this offset.
 			if fRef == nil {
-				removedOffsetsCounter++
 				continue
 			}
 
@@ -826,10 +903,11 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			realTotal := totalNumberOfRecords - removedOffsetsCounter
 
 			metadata = &Metadata{
-				NumberOfWritten: numberOfWritten,
-				Current:         uint64(queried),
-				Total:           uint64(realTotal),
-				LeftOff:         uint64(leftOff),
+				NumberOfWritten:    numberOfWritten,
+				Current:            uint64(queried),
+				Total:              uint64(realTotal),
+				LeftOff:            uint64(leftOff),
+				TruncatedTimestamp: truncatedTimestamp,
 			}
 			queried = 0
 
@@ -979,8 +1057,11 @@ func fetch(conn net.Conn, args []string) {
 	var subOffsets []int64
 	var subPartitionRefs []int64
 	var totalNumberOfRecords int
+	var truncatedTimestamp int64
+	var removedOffsetsCounter int
 	cs.RLock()
 	totalNumberOfRecords = len(cs.offsets)
+	truncatedTimestamp = cs.truncatedTimestamp
 	if direction < 0 {
 		subOffsets = cs.offsets[:leftOff]
 		subPartitionRefs = cs.partitionRefs[:leftOff]
@@ -988,6 +1069,7 @@ func fetch(conn net.Conn, args []string) {
 		subOffsets = cs.offsets[leftOff:]
 		subPartitionRefs = cs.partitionRefs[leftOff:]
 	}
+	removedOffsetsCounter = cs.removedOffsetsCounter
 	cs.RUnlock()
 
 	var metadata []byte
@@ -996,10 +1078,11 @@ func fetch(conn net.Conn, args []string) {
 	var queried uint64 = 0
 
 	metadata, _ = json.Marshal(Metadata{
-		NumberOfWritten: numberOfWritten,
-		Current:         uint64(queried),
-		Total:           uint64(totalNumberOfRecords),
-		LeftOff:         uint64(leftOff),
+		NumberOfWritten:    numberOfWritten,
+		Current:            uint64(queried),
+		Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
+		LeftOff:            uint64(leftOff),
+		TruncatedTimestamp: truncatedTimestamp,
 	})
 
 	if direction < 0 {
@@ -1072,10 +1155,11 @@ func fetch(conn net.Conn, args []string) {
 		check(err)
 
 		metadata, _ = json.Marshal(Metadata{
-			NumberOfWritten: numberOfWritten,
-			Current:         uint64(queried),
-			Total:           uint64(totalNumberOfRecords),
-			LeftOff:         uint64(leftOff),
+			NumberOfWritten:    numberOfWritten,
+			Current:            uint64(queried),
+			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
+			LeftOff:            uint64(leftOff),
+			TruncatedTimestamp: truncatedTimestamp,
 		})
 
 		_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", CMD_METADATA, string(metadata))))

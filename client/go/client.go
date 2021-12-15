@@ -20,10 +20,11 @@ import (
 
 // Metadata info that's streamed after each record
 type Metadata struct {
-	Current         uint64 `json:"current"`
-	Total           uint64 `json:"total"`
-	NumberOfWritten uint64 `json:"numberOfWritten"`
-	LeftOff         uint64 `json:"leftOff"`
+	Current            uint64 `json:"current"`
+	Total              uint64 `json:"total"`
+	NumberOfWritten    uint64 `json:"numberOfWritten"`
+	LeftOff            uint64 `json:"leftOff"`
+	TruncatedTimestamp int64  `json:"truncatedTimestamp"`
 }
 
 // Commands refers to TCP connection modes.
