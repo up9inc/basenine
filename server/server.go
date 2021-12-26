@@ -67,6 +67,8 @@ type ConnectionMode int
 // MACRO is short lasting TCP connection mode for setting a macro that will be expanded
 // later on for each individual query.
 //
+// INDEX is short lasting TCP connection mode for registering an indexed path
+//
 // LIMIT is short lasting TCP connection mode for setting the maximum database size
 // to limit the disk usage.
 const (
@@ -77,6 +79,7 @@ const (
 	FETCH
 	VALIDATE
 	MACRO
+	INDEX
 	LIMIT
 )
 
@@ -90,6 +93,7 @@ const (
 	CMD_FETCH    string = "/fetch"
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
+	CMD_INDEX    string = "/index"
 	CMD_LIMIT    string = "/limit"
 	CMD_METADATA string = "/metadata"
 )
@@ -129,6 +133,8 @@ type ConcurrentSlice struct {
 	partitionSizeLimit    int64
 	truncatedTimestamp    int64
 	removedOffsetsCounter int
+	macros                map[string]string
+	indexes               []string
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
@@ -141,6 +147,8 @@ type ConcurrentSliceExport struct {
 	PartitionSizeLimit    int64
 	TruncatedTimestamp    int64
 	RemovedOffsetsCounter int
+	Macros                map[string]string
+	Indexes               []string
 }
 
 // Core dump filename
@@ -167,6 +175,7 @@ func init() {
 	// Initialize the ConcurrentSlice.
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
+		macros:         make(map[string]string),
 	}
 
 	// If persistent mode is enabled, try to restore the core.
@@ -286,6 +295,8 @@ func dumpCore(silent bool, dontLock bool) {
 	csExport.PartitionSizeLimit = cs.partitionSizeLimit
 	csExport.TruncatedTimestamp = cs.truncatedTimestamp
 	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
+	csExport.Macros = cs.macros
+	csExport.Indexes = cs.indexes
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -337,6 +348,8 @@ func restoreCore() {
 	cs.partitionSizeLimit = csExport.PartitionSizeLimit
 	cs.truncatedTimestamp = csExport.TruncatedTimestamp
 	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
+	cs.macros = csExport.Macros
+	cs.indexes = csExport.Indexes
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 }
@@ -538,6 +551,8 @@ func handleConnection(conn net.Conn) {
 			validateQuery(conn, data)
 		case MACRO:
 			applyMacro(conn, data)
+		case INDEX:
+			registerIndex(conn, data)
 		case LIMIT:
 			setLimit(conn, data)
 		}
@@ -626,6 +641,8 @@ func insertData(data []byte) {
 
 	// Set "id" field to the index of the record.
 	d["id"] = l
+
+	// TODO: Handle indexes
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -781,6 +798,7 @@ func handleNegativeLeftOff(leftOff int64) int64 {
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
 func streamRecords(conn net.Conn, data []byte) (err error) {
+	// TODO: Handle indexes
 	expr, limit, rlimit, leftOff, err := prepareQuery(conn, string(data))
 
 	leftOff = handleNegativeLeftOff(leftOff)
@@ -1003,6 +1021,7 @@ func ReverseSlice(arr []int64) (newArr []int64) {
 
 // fetch defines a macro that will be expanded for each individual query.
 func fetch(conn net.Conn, args []string) {
+	// TODO: Handle indexes
 	// Parse the arguments
 	_leftOff, err := strconv.Atoi(args[0])
 	if err != nil {
@@ -1210,6 +1229,19 @@ func applyMacro(conn net.Conn, data []byte) {
 	expanded := strings.TrimSpace(s[1])
 
 	addMacro(macro, expanded)
+
+	conn.Write([]byte(fmt.Sprintf("OK\n")))
+}
+
+// registerIndex registers an index that speeds up queries
+func registerIndex(conn net.Conn, data []byte) {
+	path := string(data)
+
+	if len(path) < 1 {
+		conn.Write([]byte("Error: The indexed path cannot be empty!\n"))
+	}
+
+	addIndex(path)
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }

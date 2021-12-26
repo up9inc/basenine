@@ -353,6 +353,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
+		macros:         make(map[string]string),
 	}
 
 	server, client := net.Pipe()
@@ -423,6 +424,32 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 		removeDatabaseFiles()
 	}
+}
+
+func TestServerProtocolIndexMode(t *testing.T) {
+	path := `brand.name`
+
+	cs = ConcurrentSlice{
+		partitionIndex: -1,
+		macros:         make(map[string]string),
+	}
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	f := newPartition()
+	assert.NotNil(t, f)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/index\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", path)))
+
+	client.Close()
+	server.Close()
+
+	// TODO: Verify the speed up on the query
 }
 
 var testServerProtocolFetchModeData = []struct {
