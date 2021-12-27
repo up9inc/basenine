@@ -113,13 +113,13 @@ func TestEval(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 		// repr.Println(expr)
-		limit, rlimit, leftOff, err := Precompute(expr)
+		prop, err := Precompute(expr)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		assert.Equal(t, row.limit, limit)
-		assert.Equal(t, row.rlimit, rlimit)
-		assert.Equal(t, row.leftOff, leftOff)
+		assert.Equal(t, row.limit, prop.limit)
+		assert.Equal(t, row.rlimit, prop.rlimit)
+		assert.Equal(t, row.leftOff, prop.leftOff)
 		// repr.Println(expr)
 		truth, err := Eval(expr, row.json)
 		if err != nil {

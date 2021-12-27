@@ -772,7 +772,7 @@ func watchPartitions() (err error) {
 }
 
 // prepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
-func prepareQuery(conn net.Conn, query string) (expr *Expression, limit uint64, rlimit uint64, leftOff int64, err error) {
+func prepareQuery(conn net.Conn, query string) (expr *Expression, prop Propagate, err error) {
 	// Expand all macros in the query, if there are any.
 	query, err = expandMacros(query)
 	check(err)
@@ -787,7 +787,7 @@ func prepareQuery(conn net.Conn, query string) (expr *Expression, limit uint64, 
 	// leftOff is the state to track the last offset's index in cs.offsets
 	// default value of leftOff is 0. leftOff(..) helper overrides it.
 	// can be -1 also, means that it's last record.
-	limit, rlimit, leftOff, err = Precompute(expr)
+	prop, err = Precompute(expr)
 	check(err)
 
 	return
@@ -816,7 +816,10 @@ func handleNegativeLeftOff(leftOff int64) int64 {
 // Means that either the current partition or the partition before that.
 func streamRecords(conn net.Conn, data []byte) (err error) {
 	// TODO: Handle indexes
-	expr, limit, rlimit, leftOff, err := prepareQuery(conn, string(data))
+	expr, prop, err := prepareQuery(conn, string(data))
+	limit := prop.limit
+	rlimit := prop.rlimit
+	leftOff := prop.leftOff
 
 	leftOff = handleNegativeLeftOff(leftOff)
 
@@ -1072,7 +1075,7 @@ func fetch(conn net.Conn, args []string) {
 	}
 
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
-	expr, _, _, _, err := prepareQuery(conn, query)
+	expr, _, err := prepareQuery(conn, query)
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
