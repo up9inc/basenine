@@ -137,6 +137,7 @@ type ConcurrentSlice struct {
 	indexes               []string
 	indexedPaths          []jp.Expr
 	indexesReal           [][]int
+	indexedOffsets        [][]int64
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
@@ -152,6 +153,7 @@ type ConcurrentSliceExport struct {
 	Macros                map[string]string
 	Indexes               []string
 	IndexesReal           [][]int
+	IndexedOffsets        [][]int64
 }
 
 // Core dump filename
@@ -301,6 +303,7 @@ func dumpCore(silent bool, dontLock bool) {
 	csExport.Macros = cs.macros
 	csExport.Indexes = cs.indexes
 	csExport.IndexesReal = cs.indexesReal
+	csExport.IndexedOffsets = cs.indexedOffsets
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -355,6 +358,7 @@ func restoreCore() {
 	cs.macros = csExport.Macros
 	cs.indexes = csExport.Indexes
 	cs.indexesReal = csExport.IndexesReal
+	cs.indexedOffsets = csExport.IndexedOffsets
 
 	for _, path := range csExport.Indexes {
 		var indexedPath jp.Expr

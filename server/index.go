@@ -36,7 +36,7 @@ func addIndex(path string) (err error) {
 }
 
 // handleIndexedInsertion updates and sorts the indexed JSONPaths.
-// Expects int data type.
+// Expects int data type. Should be called with a lock.
 func handleIndexedInsertion(d map[string]interface{}) {
 	for i, indexedPath := range cs.indexedPaths {
 		result := indexedPath.Get(d)
@@ -55,4 +55,20 @@ func handleIndexedInsertion(d map[string]interface{}) {
 			}
 		}
 	}
+}
+
+// computeQueryJump computes the queryJump value of given path with a fast iteration
+// if the path is indexed. Otherwise it returns 0
+func computeQueryJump(path string) (queryJump int64) {
+	cs.RLock()
+	indexes := cs.indexes
+	cs.RUnlock()
+
+	for _, indexedPath := range indexes {
+		if indexedPath == path {
+			// TODO: Fill
+		}
+	}
+
+	return
 }
