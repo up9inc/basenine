@@ -135,6 +135,8 @@ type ConcurrentSlice struct {
 	removedOffsetsCounter int
 	macros                map[string]string
 	indexes               []string
+	indexedPaths          []jp.Expr
+	indexesReal           [][]int
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
@@ -149,6 +151,7 @@ type ConcurrentSliceExport struct {
 	RemovedOffsetsCounter int
 	Macros                map[string]string
 	Indexes               []string
+	IndexesReal           [][]int
 }
 
 // Core dump filename
@@ -297,6 +300,7 @@ func dumpCore(silent bool, dontLock bool) {
 	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
 	csExport.Macros = cs.macros
 	csExport.Indexes = cs.indexes
+	csExport.IndexesReal = cs.indexesReal
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -350,6 +354,14 @@ func restoreCore() {
 	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
 	cs.macros = csExport.Macros
 	cs.indexes = csExport.Indexes
+	cs.indexesReal = csExport.IndexesReal
+
+	for _, path := range csExport.Indexes {
+		var indexedPath jp.Expr
+		indexedPath, err = jp.ParseString(path)
+		check(err)
+		cs.indexedPaths = append(cs.indexedPaths, indexedPath)
+	}
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 }
@@ -642,7 +654,8 @@ func insertData(data []byte) {
 	// Set "id" field to the index of the record.
 	d["id"] = l
 
-	// TODO: Handle indexes
+	// Update and sort the indexes
+	handleIndexedInsertion(d)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -1223,6 +1236,7 @@ func applyMacro(conn net.Conn, data []byte) {
 
 	if len(s) != 2 {
 		conn.Write([]byte("Error: Provide only two expressions!\n"))
+		return
 	}
 
 	macro := strings.TrimSpace(s[0])
@@ -1239,9 +1253,14 @@ func registerIndex(conn net.Conn, data []byte) {
 
 	if len(path) < 1 {
 		conn.Write([]byte("Error: The indexed path cannot be empty!\n"))
+		return
 	}
 
-	addIndex(path)
+	err := addIndex(path)
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("Error while registering the index: %v\n", err)))
+		return
+	}
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }

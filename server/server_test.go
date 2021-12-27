@@ -427,7 +427,8 @@ func TestServerProtocolMacroMode(t *testing.T) {
 }
 
 func TestServerProtocolIndexMode(t *testing.T) {
-	path := `brand.name`
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+	path := `year`
 
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
@@ -449,7 +450,17 @@ func TestServerProtocolIndexMode(t *testing.T) {
 	client.Close()
 	server.Close()
 
-	// TODO: Verify the speed up on the query
+	server, client = net.Pipe()
+	go handleConnection(server)
+
+	for index := 0; index < 100; index++ {
+		insertData([]byte(payload))
+	}
+
+	client.Close()
+	server.Close()
+
+	removeDatabaseFiles()
 }
 
 var testServerProtocolFetchModeData = []struct {

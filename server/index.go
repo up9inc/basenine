@@ -4,8 +4,15 @@
 
 package main
 
+import (
+	"log"
+	"sort"
+
+	jp "github.com/ohler55/ojg/jp"
+)
+
 // addIndex adds the indexed path into a global slice.
-func addIndex(path string) {
+func addIndex(path string) (err error) {
 	cs.RLock()
 	indexes := cs.indexes
 	cs.RUnlock()
@@ -14,7 +21,38 @@ func addIndex(path string) {
 		return
 	}
 
+	var indexedPath jp.Expr
+	indexedPath, err = jp.ParseString(path)
+	if err != nil {
+		return
+	}
+
 	cs.Lock()
 	cs.indexes = append(cs.indexes, path)
+	cs.indexedPaths = append(cs.indexedPaths, indexedPath)
 	cs.Unlock()
+
+	return
+}
+
+// handleIndexedInsertion updates and sorts the indexed JSONPaths.
+// Expects int data type.
+func handleIndexedInsertion(d map[string]interface{}) {
+	for i, indexedPath := range cs.indexedPaths {
+		result := indexedPath.Get(d)
+
+		if len(result) > 0 {
+			x := result[0]
+			switch v := x.(type) {
+			case int:
+				cs.indexesReal[i] = append(cs.indexesReal[i], v)
+
+				sort.Slice(cs.indexesReal, func(j, k int) bool {
+					return cs.indexesReal[i][j] < cs.indexesReal[i][k]
+				})
+			default:
+				log.Printf("Expected int on indexed got type %T!\n", v)
+			}
+		}
+	}
 }
