@@ -427,7 +427,6 @@ func TestServerProtocolMacroMode(t *testing.T) {
 }
 
 func TestServerProtocolIndexMode(t *testing.T) {
-	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	path := `year`
 
 	cs = ConcurrentSlice{
@@ -453,14 +452,56 @@ func TestServerProtocolIndexMode(t *testing.T) {
 	server, client = net.Pipe()
 	go handleConnection(server)
 
-	for index := 0; index < 100; index++ {
-		insertData([]byte(payload))
+	for index := 1000; index < 2000; index++ {
+		insertData([]byte(fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":%d}`, index)))
 	}
 
-	client.Close()
-	server.Close()
+	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+		defer wg.Done()
+		index := 1600
+		for {
+			scanner := bufio.NewScanner(conn)
 
-	removeDatabaseFiles()
+			for {
+				ok := scanner.Scan()
+				bytes := scanner.Bytes()
+
+				command := handleCommands(bytes)
+				if command {
+					break
+				}
+
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":%d}`, index-1000, index)
+				index++
+				assert.Equal(t, expected, string(bytes))
+
+				if index > 1999 {
+					return
+				}
+
+				assert.True(t, ok)
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, client)
+	wg.Add(1)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/query\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", `year >= 1600`)))
+
+	if waitTimeout(&wg, 3*time.Second) {
+		t.Fatal("Timed out waiting for wait group")
+	} else {
+		client.Close()
+		server.Close()
+
+		removeDatabaseFiles()
+	}
 }
 
 var testServerProtocolFetchModeData = []struct {

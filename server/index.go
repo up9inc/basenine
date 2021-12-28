@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"sort"
 
 	jp "github.com/ohler55/ojg/jp"
@@ -12,6 +13,7 @@ import (
 
 // addIndex adds the indexed path into a global slice.
 func addIndex(path string) (err error) {
+	path = fmt.Sprintf(".%s", path)
 	cs.RLock()
 	indexes := cs.indexes
 	cs.RUnlock()
@@ -29,6 +31,7 @@ func addIndex(path string) (err error) {
 	cs.Lock()
 	cs.indexes = append(cs.indexes, path)
 	cs.indexedPaths = append(cs.indexedPaths, indexedPath)
+	cs.indexedValues = append(cs.indexedValues, SortIndexedValues{})
 	cs.Unlock()
 
 	return
@@ -47,9 +50,7 @@ func handleIndexedInsertion(d map[string]interface{}, leftOff int) {
 				LeftOff: leftOff,
 			})
 
-			sort.Slice(cs.indexedValues, func(j, k int) bool {
-				return cs.indexedValues[i][j].Real < cs.indexedValues[i][k].Real
-			})
+			sort.Sort(sort.Reverse(cs.indexedValues[i]))
 		}
 	}
 }

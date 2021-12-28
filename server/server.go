@@ -136,13 +136,19 @@ type ConcurrentSlice struct {
 	macros                map[string]string
 	indexes               []string
 	indexedPaths          []jp.Expr
-	indexedValues         [][]IndexedValue
+	indexedValues         []SortIndexedValues
 }
 
 type IndexedValue struct {
 	Real    float64
 	LeftOff int
 }
+
+type SortIndexedValues []IndexedValue
+
+func (x SortIndexedValues) Len() int           { return len(x) }
+func (x SortIndexedValues) Less(i, j int) bool { return x[i].Real < x[j].Real }
+func (x SortIndexedValues) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
 type ConcurrentSliceExport struct {
@@ -156,7 +162,7 @@ type ConcurrentSliceExport struct {
 	RemovedOffsetsCounter int
 	Macros                map[string]string
 	Indexes               []string
-	IndexedValues         [][]IndexedValue
+	IndexedValues         []SortIndexedValues
 }
 
 // Core dump filename
@@ -616,6 +622,9 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 
 		case strings.HasPrefix(message, CMD_MACRO):
 			mode = MACRO
+
+		case strings.HasPrefix(message, CMD_INDEX):
+			mode = INDEX
 
 		case strings.HasPrefix(message, CMD_LIMIT):
 			mode = LIMIT
