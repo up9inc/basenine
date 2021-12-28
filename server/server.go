@@ -136,8 +136,12 @@ type ConcurrentSlice struct {
 	macros                map[string]string
 	indexes               []string
 	indexedPaths          []jp.Expr
-	indexesReal           [][]int
-	indexedOffsets        [][]int64
+	indexedValues         [][]IndexedValue
+}
+
+type IndexedValue struct {
+	Real   int64
+	Offset int64
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
@@ -152,8 +156,7 @@ type ConcurrentSliceExport struct {
 	RemovedOffsetsCounter int
 	Macros                map[string]string
 	Indexes               []string
-	IndexesReal           [][]int
-	IndexedOffsets        [][]int64
+	IndexedValues         [][]IndexedValue
 }
 
 // Core dump filename
@@ -302,8 +305,7 @@ func dumpCore(silent bool, dontLock bool) {
 	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
 	csExport.Macros = cs.macros
 	csExport.Indexes = cs.indexes
-	csExport.IndexesReal = cs.indexesReal
-	csExport.IndexedOffsets = cs.indexedOffsets
+	csExport.IndexedValues = cs.indexedValues
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -357,8 +359,7 @@ func restoreCore() {
 	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
 	cs.macros = csExport.Macros
 	cs.indexes = csExport.Indexes
-	cs.indexesReal = csExport.IndexesReal
-	cs.indexedOffsets = csExport.IndexedOffsets
+	cs.indexedValues = csExport.IndexedValues
 
 	for _, path := range csExport.Indexes {
 		var indexedPath jp.Expr
@@ -659,7 +660,7 @@ func insertData(data []byte) {
 	d["id"] = l
 
 	// Update and sort the indexes
-	handleIndexedInsertion(d)
+	handleIndexedInsertion(d, lastOffset)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)

@@ -37,18 +37,21 @@ func addIndex(path string) (err error) {
 
 // handleIndexedInsertion updates and sorts the indexed JSONPaths.
 // Expects int data type. Should be called with a lock.
-func handleIndexedInsertion(d map[string]interface{}) {
+func handleIndexedInsertion(d map[string]interface{}, offset int64) {
 	for i, indexedPath := range cs.indexedPaths {
 		result := indexedPath.Get(d)
 
 		if len(result) > 0 {
 			x := result[0]
 			switch v := x.(type) {
-			case int:
-				cs.indexesReal[i] = append(cs.indexesReal[i], v)
+			case int64:
+				cs.indexedValues[i] = append(cs.indexedValues[i], IndexedValue{
+					Real:   v,
+					Offset: offset,
+				})
 
-				sort.Slice(cs.indexesReal, func(j, k int) bool {
-					return cs.indexesReal[i][j] < cs.indexesReal[i][k]
+				sort.Slice(cs.indexedValues, func(j, k int) bool {
+					return cs.indexedValues[i][j].Real < cs.indexedValues[i][k].Real
 				})
 			default:
 				log.Printf("Expected int on indexed got type %T!\n", v)

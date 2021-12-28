@@ -25,6 +25,13 @@ type Propagate struct {
 	leftOff int64
 }
 
+var comparisonGreater = map[string]bool{
+	">":  true,
+	"<":  false,
+	">=": true,
+	"<=": false,
+}
+
 // strContains checks if a string is present in a slice
 func strContains(s []string, str string) bool {
 	for _, v := range s {
@@ -57,7 +64,7 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 // computeCallExpression does compile-time evaluations for the
 // CallExpression struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, helper *string, prop Propagate, err error) {
+func computeCallExpression(call *CallExpression, prependPath string, queryGreater bool) (jsonPath *jp.Expr, helper *string, prop Propagate, err error) {
 	if call.Parameters == nil {
 		// Not a function call
 		if call.Identifier != nil {
@@ -122,11 +129,11 @@ func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *
 // computePrimary does compile-time evaluations for the
 // Primary struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computePrimary(pri *Primary, prependPath string) (prop Propagate, err error) {
+func computePrimary(pri *Primary, prependPath string, queryGreater bool) (prop Propagate, err error) {
 	if pri.SubExpression != nil {
 		prop, err = computeExpression(pri.SubExpression, prependPath)
 	} else if pri.CallExpression != nil {
-		pri.JsonPath, pri.Helper, prop, err = computeCallExpression(pri.CallExpression, prependPath)
+		pri.JsonPath, pri.Helper, prop, err = computeCallExpression(pri.CallExpression, prependPath, queryGreater)
 	} else if pri.Regex != nil {
 		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}
@@ -134,23 +141,23 @@ func computePrimary(pri *Primary, prependPath string) (prop Propagate, err error
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeUnary(unar *Unary, prependPath string) (prop Propagate, err error) {
+func computeUnary(unar *Unary, prependPath string, queryGreater bool) (prop Propagate, err error) {
 	var _prop Propagate
 	if unar.Unary != nil {
-		prop, err = computeUnary(unar.Unary, prependPath)
+		prop, err = computeUnary(unar.Unary, prependPath, queryGreater)
 	} else {
-		_prop, err = computePrimary(unar.Primary, prependPath)
+		_prop, err = computePrimary(unar.Primary, prependPath, queryGreater)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeComparison(comp *Comparison, prependPath string) (prop Propagate, err error) {
+func computeComparison(comp *Comparison, prependPath string, queryGreater bool) (prop Propagate, err error) {
 	var _prop Propagate
-	prop, err = computeUnary(comp.Unary, prependPath)
+	prop, err = computeUnary(comp.Unary, prependPath, comparisonGreater[comp.Op])
 	if comp.Next != nil {
-		_prop, err = computeComparison(comp.Next, prependPath)
+		_prop, err = computeComparison(comp.Next, prependPath, queryGreater)
 		prop = backpropagate(prop, _prop)
 	}
 	return
@@ -159,7 +166,7 @@ func computeComparison(comp *Comparison, prependPath string) (prop Propagate, er
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeEquality(equ *Equality, prependPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	prop, err = computeComparison(equ.Comparison, prependPath)
+	prop, err = computeComparison(equ.Comparison, prependPath, equ.Op == "==")
 	if equ.Next != nil {
 		_prop, err = computeEquality(equ.Next, prependPath)
 		prop = backpropagate(prop, _prop)
