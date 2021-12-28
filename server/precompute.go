@@ -41,8 +41,8 @@ type QueryValDirection struct {
 }
 
 type QueryJump struct {
-	offset int64
-	qvd    QueryValDirection
+	leftOff int
+	qvd     QueryValDirection
 }
 
 // strContains checks if a string is present in a slice
@@ -69,6 +69,9 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 	}
 	if xProp.leftOff == 0 {
 		xProp.leftOff = yProp.leftOff
+	}
+	if xProp.qj.leftOff == 0 {
+		xProp.qj.leftOff = yProp.qj.leftOff
 	}
 
 	return xProp

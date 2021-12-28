@@ -140,8 +140,8 @@ type ConcurrentSlice struct {
 }
 
 type IndexedValue struct {
-	Real   float64
-	Offset int64
+	Real    float64
+	LeftOff int
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
@@ -660,7 +660,7 @@ func insertData(data []byte) {
 	d["id"] = l
 
 	// Update and sort the indexes
-	handleIndexedInsertion(d, lastOffset)
+	handleIndexedInsertion(d, l)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -816,13 +816,19 @@ func handleNegativeLeftOff(leftOff int64) int64 {
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
 func streamRecords(conn net.Conn, data []byte) (err error) {
-	// TODO: Handle indexes
 	expr, prop, err := prepareQuery(conn, string(data))
 	limit := prop.limit
 	rlimit := prop.rlimit
 	leftOff := prop.leftOff
 
 	leftOff = handleNegativeLeftOff(leftOff)
+
+	// Get the leftOff value computed on compile-time
+	// based on the indexes if leftOff() helper is not used
+	// or its value is 0 or negative
+	if prop.qj.qvd.enable && leftOff < 1 {
+		leftOff = int64(prop.qj.leftOff)
+	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
@@ -1042,7 +1048,6 @@ func ReverseSlice(arr []int64) (newArr []int64) {
 
 // fetch defines a macro that will be expanded for each individual query.
 func fetch(conn net.Conn, args []string) {
-	// TODO: Handle indexes
 	// Parse the arguments
 	_leftOff, err := strconv.Atoi(args[0])
 	if err != nil {
@@ -1076,7 +1081,20 @@ func fetch(conn net.Conn, args []string) {
 	}
 
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
-	expr, _, err := prepareQuery(conn, query)
+	expr, prop, err := prepareQuery(conn, query)
+
+	// Get the leftOff value computed on compile-time
+	// based on the indexes if leftOff() helper is not used
+	// or its value is 0 or negative
+	// Also check if the direction of the query matches the
+	// direction of the expression.
+	if prop.qj.qvd.enable {
+		if direction < 0 && !prop.qj.qvd.direction {
+			leftOff = int64(prop.qj.leftOff)
+		} else if direction >= 0 && prop.qj.qvd.direction {
+			leftOff = int64(prop.qj.leftOff)
+		}
+	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0

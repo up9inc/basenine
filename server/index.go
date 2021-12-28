@@ -36,15 +36,15 @@ func addIndex(path string) (err error) {
 
 // handleIndexedInsertion updates and sorts the indexed JSONPaths.
 // Expects int data type. Should be called with a lock.
-func handleIndexedInsertion(d map[string]interface{}, offset int64) {
+func handleIndexedInsertion(d map[string]interface{}, leftOff int) {
 	for i, indexedPath := range cs.indexedPaths {
 		result := indexedPath.Get(d)
 
 		if len(result) > 0 {
 			v := float64Operand(result[0])
 			cs.indexedValues[i] = append(cs.indexedValues[i], IndexedValue{
-				Real:   v,
-				Offset: offset,
+				Real:    v,
+				LeftOff: leftOff,
 			})
 
 			sort.Slice(cs.indexedValues, func(j, k int) bool {
@@ -78,8 +78,8 @@ func computeQueryJump(path string, qvd QueryValDirection) QueryJump {
 			})
 
 			return QueryJump{
-				offset: index[j].Offset,
-				qvd:    qvd,
+				leftOff: index[j].LeftOff,
+				qvd:     qvd,
 			}
 		}
 	}
