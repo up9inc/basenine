@@ -438,14 +438,18 @@ func TestServerProtocolIndexModeInsert(t *testing.T) {
 	f := newPartition()
 	assert.NotNil(t, f)
 
-	// TODO: Indexing makes it incredibly slow (probably because of sorting)
-	// client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	// client.Write([]byte("/index\n"))
+	// Comment out the block below about indexing to disable its effect on performance
+	// the performance improvement 11.71s (indexed) vs. 12.20s (not indexed)
+	// while slowing down inserts from 9.51s to 9.71s
+	// INDEX BLOCK start
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/index\n"))
 
-	// client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	// client.Write([]byte(fmt.Sprintf("%s\n", `year`)))
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", `year`)))
+	// INDEX BLOCK end
 
-	for index := 100000; index < 200000; index++ {
+	for index := 1000000; index < 2000000; index++ {
 		insertData([]byte(fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":%d}`, index)))
 	}
 
@@ -459,7 +463,7 @@ func TestServerProtocolIndexModeWithQueryMode(t *testing.T) {
 
 	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
 		defer wg.Done()
-		index := 199600
+		index := 1999600
 		for {
 			scanner := bufio.NewScanner(conn)
 
@@ -472,13 +476,11 @@ func TestServerProtocolIndexModeWithQueryMode(t *testing.T) {
 					break
 				}
 
-				// fmt.Printf("string(bytes): %v\n", string(bytes))
-
-				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":%d}`, index-100000, index)
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":%d}`, index-1000000, index)
 				index++
 				assert.Equal(t, expected, string(bytes))
 
-				if index > 199999 {
+				if index > 1999999 {
 					return
 				}
 
@@ -495,9 +497,9 @@ func TestServerProtocolIndexModeWithQueryMode(t *testing.T) {
 	client.Write([]byte("/query\n"))
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte(fmt.Sprintf("%s\n", `year >= 199600`)))
+	client.Write([]byte(fmt.Sprintf("%s\n", `year >= 1999600`)))
 
-	if waitTimeout(&wg, 3*time.Second) {
+	if waitTimeout(&wg, 100*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	} else {
 		client.Close()

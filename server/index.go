@@ -49,8 +49,6 @@ func handleIndexedInsertion(d map[string]interface{}, leftOff int) {
 				Real:    v,
 				LeftOff: leftOff,
 			})
-
-			sort.Sort(sort.Reverse(cs.indexedValues[i]))
 		}
 	}
 }
@@ -67,6 +65,7 @@ func computeQueryJump(path string, qvd QueryValDirection) QueryJump {
 			cs.RLock()
 			index := cs.indexedValues[i]
 			cs.RUnlock()
+			sort.Stable(sort.Reverse(index))
 
 			j := sort.Search(len(index), func(k int) bool {
 				value := qvd.value
