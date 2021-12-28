@@ -140,7 +140,7 @@ type ConcurrentSlice struct {
 }
 
 type IndexedValue struct {
-	Real   int64
+	Real   float64
 	Offset int64
 }
 
