@@ -140,7 +140,7 @@ type ConcurrentSlice struct {
 }
 
 type IndexedValue struct {
-	Real    float64
+	Real    int64
 	LeftOff int
 }
 
@@ -835,7 +835,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	// Get the leftOff value computed on compile-time
 	// based on the indexes if leftOff() helper is not used
 	// or its value is 0 or negative
-	if prop.qj.qvd.enable && leftOff < 1 {
+	if prop.qj.qvd.enable && prop.leftOff < 1 {
 		leftOff = int64(prop.qj.leftOff)
 	}
 
@@ -1097,7 +1097,7 @@ func fetch(conn net.Conn, args []string) {
 	// or its value is 0 or negative
 	// Also check if the direction of the query matches the
 	// direction of the expression.
-	if prop.qj.qvd.enable {
+	if prop.qj.qvd.enable && _leftOff < 1 {
 		if direction < 0 && !prop.qj.qvd.direction {
 			leftOff = int64(prop.qj.leftOff)
 		} else if direction >= 0 && prop.qj.qvd.direction {

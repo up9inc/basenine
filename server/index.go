@@ -44,7 +44,7 @@ func handleIndexedInsertion(d map[string]interface{}, leftOff int) {
 		result := indexedPath.Get(d)
 
 		if len(result) > 0 {
-			v := float64Operand(result[0])
+			v := int64(float64Operand(result[0]))
 			cs.indexedValues[i] = append(cs.indexedValues[i], IndexedValue{
 				Real:    v,
 				LeftOff: leftOff,
@@ -65,7 +65,11 @@ func computeQueryJump(path string, qvd QueryValDirection) QueryJump {
 			cs.RLock()
 			index := cs.indexedValues[i]
 			cs.RUnlock()
-			sort.Stable(sort.Reverse(index))
+			if qvd.direction {
+				sort.Stable(sort.Reverse(index))
+			} else {
+				sort.Stable(index)
+			}
 
 			j := sort.Search(len(index), func(k int) bool {
 				value := qvd.value

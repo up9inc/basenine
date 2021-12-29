@@ -504,6 +504,70 @@ func TestServerProtocolIndexModeWithQueryMode(t *testing.T) {
 	} else {
 		client.Close()
 		server.Close()
+	}
+}
+
+func TestServerProtocolIndexModeWithFetchMode(t *testing.T) {
+	leftOff := -1
+	direction := -1
+	query := `year <= 1000500`
+	limit := 100
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+		defer wg.Done()
+		index := 1000500
+		for {
+			scanner := bufio.NewScanner(conn)
+
+			for {
+				ok := scanner.Scan()
+				bytes := scanner.Bytes()
+
+				command := handleCommands(bytes)
+				if command {
+					break
+				}
+
+				index--
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":%d}`, index-1000000, index)
+				assert.Equal(t, expected, string(bytes))
+
+				if index < 1000401 {
+					return
+				}
+
+				assert.True(t, ok)
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, client)
+	wg.Add(1)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/fetch\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", leftOff)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", direction)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", query)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", limit)))
+
+	if waitTimeout(&wg, 10*time.Second) {
+		t.Fatal("Timed out waiting for wait group")
+	} else {
+		client.Close()
+		server.Close()
 
 		removeDatabaseFiles()
 	}

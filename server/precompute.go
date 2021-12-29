@@ -34,7 +34,7 @@ var comparisonGreater = map[string]bool{
 }
 
 type QueryValDirection struct {
-	value     float64
+	value     int64
 	operator  string
 	direction bool
 	enable    bool
@@ -72,6 +72,7 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 	}
 	if xProp.qj.leftOff == 0 {
 		xProp.qj.leftOff = yProp.qj.leftOff
+		xProp.qj.qvd.enable = yProp.qj.qvd.enable
 	}
 
 	return xProp
@@ -176,14 +177,14 @@ func computeUnary(unar *Unary, prependPath string, qvd QueryValDirection) (prop 
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeComparison(comp *Comparison, prependPath string, qvd QueryValDirection, disableQueryJump bool) (prop Propagate, err error) {
 	var _prop Propagate
-	var v float64
+	var v int64
 	if comp.Next != nil {
 		var next interface{}
 		next, _, err = evalComparison(comp.Next, nil)
 		if err != nil {
 			return
 		}
-		v = float64Operand(next)
+		v = int64(float64Operand(next))
 	}
 	enableQueryJump := true
 	if disableQueryJump {
@@ -200,14 +201,14 @@ func computeComparison(comp *Comparison, prependPath string, qvd QueryValDirecti
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeEquality(equ *Equality, prependPath string, disableQueryJump bool) (prop Propagate, err error) {
 	var _prop Propagate
-	var v float64
+	var v int64
 	if equ.Next != nil {
 		var next interface{}
 		next, _, err = evalEquality(equ.Next, nil)
 		if err != nil {
 			return
 		}
-		v = float64Operand(next)
+		v = int64(float64Operand(next))
 	}
 	prop, err = computeComparison(equ.Comparison, prependPath, QueryValDirection{v, equ.Op, true, equ.Op == "=="}, disableQueryJump)
 	if equ.Next != nil {
