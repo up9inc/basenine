@@ -67,6 +67,8 @@ type ConnectionMode int
 // MACRO is short lasting TCP connection mode for setting a macro that will be expanded
 // later on for each individual query.
 //
+// INDEX is short lasting TCP connection mode for registering an indexed path
+//
 // LIMIT is short lasting TCP connection mode for setting the maximum database size
 // to limit the disk usage.
 const (
@@ -77,6 +79,7 @@ const (
 	FETCH
 	VALIDATE
 	MACRO
+	INDEX
 	LIMIT
 )
 
@@ -90,6 +93,7 @@ const (
 	CMD_FETCH    string = "/fetch"
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
+	CMD_INDEX    string = "/index"
 	CMD_LIMIT    string = "/limit"
 	CMD_METADATA string = "/metadata"
 )
@@ -129,7 +133,22 @@ type ConcurrentSlice struct {
 	partitionSizeLimit    int64
 	truncatedTimestamp    int64
 	removedOffsetsCounter int
+	macros                map[string]string
+	indexes               []string
+	indexedPaths          []jp.Expr
+	indexedValues         []SortIndexedValues
 }
+
+type IndexedValue struct {
+	Real    int64
+	LeftOff int
+}
+
+type SortIndexedValues []IndexedValue
+
+func (x SortIndexedValues) Len() int           { return len(x) }
+func (x SortIndexedValues) Less(i, j int) bool { return x[i].Real < x[j].Real }
+func (x SortIndexedValues) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
 type ConcurrentSliceExport struct {
@@ -141,6 +160,9 @@ type ConcurrentSliceExport struct {
 	PartitionSizeLimit    int64
 	TruncatedTimestamp    int64
 	RemovedOffsetsCounter int
+	Macros                map[string]string
+	Indexes               []string
+	IndexedValues         []SortIndexedValues
 }
 
 // Core dump filename
@@ -167,6 +189,7 @@ func init() {
 	// Initialize the ConcurrentSlice.
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
+		macros:         make(map[string]string),
 	}
 
 	// If persistent mode is enabled, try to restore the core.
@@ -286,6 +309,9 @@ func dumpCore(silent bool, dontLock bool) {
 	csExport.PartitionSizeLimit = cs.partitionSizeLimit
 	csExport.TruncatedTimestamp = cs.truncatedTimestamp
 	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
+	csExport.Macros = cs.macros
+	csExport.Indexes = cs.indexes
+	csExport.IndexedValues = cs.indexedValues
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -337,6 +363,16 @@ func restoreCore() {
 	cs.partitionSizeLimit = csExport.PartitionSizeLimit
 	cs.truncatedTimestamp = csExport.TruncatedTimestamp
 	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
+	cs.macros = csExport.Macros
+	cs.indexes = csExport.Indexes
+	cs.indexedValues = csExport.IndexedValues
+
+	for _, path := range csExport.Indexes {
+		var indexedPath jp.Expr
+		indexedPath, err = jp.ParseString(path)
+		check(err)
+		cs.indexedPaths = append(cs.indexedPaths, indexedPath)
+	}
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 }
@@ -538,6 +574,8 @@ func handleConnection(conn net.Conn) {
 			validateQuery(conn, data)
 		case MACRO:
 			applyMacro(conn, data)
+		case INDEX:
+			registerIndex(conn, data)
 		case LIMIT:
 			setLimit(conn, data)
 		}
@@ -585,6 +623,9 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 		case strings.HasPrefix(message, CMD_MACRO):
 			mode = MACRO
 
+		case strings.HasPrefix(message, CMD_INDEX):
+			mode = INDEX
+
 		case strings.HasPrefix(message, CMD_LIMIT):
 			mode = LIMIT
 
@@ -626,6 +667,9 @@ func insertData(data []byte) {
 
 	// Set "id" field to the index of the record.
 	d["id"] = l
+
+	// Update and sort the indexes
+	handleIndexedInsertion(d, l)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -738,7 +782,7 @@ func watchPartitions() (err error) {
 }
 
 // prepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
-func prepareQuery(conn net.Conn, query string) (expr *Expression, limit uint64, rlimit uint64, leftOff int64, err error) {
+func prepareQuery(conn net.Conn, query string) (expr *Expression, prop Propagate, err error) {
 	// Expand all macros in the query, if there are any.
 	query, err = expandMacros(query)
 	check(err)
@@ -753,7 +797,7 @@ func prepareQuery(conn net.Conn, query string) (expr *Expression, limit uint64, 
 	// leftOff is the state to track the last offset's index in cs.offsets
 	// default value of leftOff is 0. leftOff(..) helper overrides it.
 	// can be -1 also, means that it's last record.
-	limit, rlimit, leftOff, err = Precompute(expr)
+	prop, err = Precompute(expr)
 	check(err)
 
 	return
@@ -781,9 +825,19 @@ func handleNegativeLeftOff(leftOff int64) int64 {
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
 func streamRecords(conn net.Conn, data []byte) (err error) {
-	expr, limit, rlimit, leftOff, err := prepareQuery(conn, string(data))
+	expr, prop, err := prepareQuery(conn, string(data))
+	limit := prop.limit
+	rlimit := prop.rlimit
+	leftOff := prop.leftOff
 
 	leftOff = handleNegativeLeftOff(leftOff)
+
+	// Get the leftOff value computed on compile-time
+	// based on the indexes if leftOff() helper is not used
+	// or its value is 0 or negative
+	if prop.qj.qvd.enable && prop.leftOff < 1 {
+		leftOff = int64(prop.qj.leftOff)
+	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
@@ -1036,7 +1090,20 @@ func fetch(conn net.Conn, args []string) {
 	}
 
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
-	expr, _, _, _, err := prepareQuery(conn, query)
+	expr, prop, err := prepareQuery(conn, query)
+
+	// Get the leftOff value computed on compile-time
+	// based on the indexes if leftOff() helper is not used
+	// or its value is 0 or negative
+	// Also check if the direction of the query matches the
+	// direction of the expression.
+	if prop.qj.qvd.enable && _leftOff < 1 {
+		if direction < 0 && !prop.qj.qvd.direction {
+			leftOff = int64(prop.qj.leftOff)
+		} else if direction >= 0 && prop.qj.qvd.direction {
+			leftOff = int64(prop.qj.leftOff)
+		}
+	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
@@ -1204,12 +1271,31 @@ func applyMacro(conn net.Conn, data []byte) {
 
 	if len(s) != 2 {
 		conn.Write([]byte("Error: Provide only two expressions!\n"))
+		return
 	}
 
 	macro := strings.TrimSpace(s[0])
 	expanded := strings.TrimSpace(s[1])
 
 	addMacro(macro, expanded)
+
+	conn.Write([]byte(fmt.Sprintf("OK\n")))
+}
+
+// registerIndex registers an index that speeds up queries
+func registerIndex(conn net.Conn, data []byte) {
+	path := string(data)
+
+	if len(path) < 1 {
+		conn.Write([]byte("Error: The indexed path cannot be empty!\n"))
+		return
+	}
+
+	err := addIndex(path)
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("Error while registering the index: %v\n", err)))
+		return
+	}
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }

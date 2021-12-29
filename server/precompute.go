@@ -18,6 +18,33 @@ var compileTimeEvaluatedHelpers = []string{
 	"leftOff",
 }
 
+type Propagate struct {
+	path    string
+	limit   uint64
+	rlimit  uint64
+	leftOff int64
+	qj      QueryJump
+}
+
+var comparisonGreater = map[string]bool{
+	">":  true,
+	"<":  false,
+	">=": true,
+	"<=": false,
+}
+
+type QueryValDirection struct {
+	value     int64
+	operator  string
+	direction bool
+	enable    bool
+}
+
+type QueryJump struct {
+	leftOff int
+	qvd     QueryValDirection
+}
+
 // strContains checks if a string is present in a slice
 func strContains(s []string, str string) bool {
 	for _, v := range s {
@@ -30,60 +57,73 @@ func strContains(s []string, str string) bool {
 }
 
 // Backpropagates the values returned from the binary expressions
-func backpropagate(xPath string, xLimit uint64, xRlimit uint64, xLeftOff int64, yPath string, yLimit uint64, yRlimit uint64, yLeftOff int64) (path string, limit uint64, rlimit uint64, leftOff int64) {
-	if xPath == "" {
-		xPath = yPath
+func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
+	if xProp.path == "" {
+		xProp.path = yProp.path
 	}
-	if xLimit == 0 {
-		xLimit = yLimit
+	if xProp.limit == 0 {
+		xProp.limit = yProp.limit
 	}
-	if xRlimit == 0 {
-		xRlimit = yRlimit
+	if xProp.rlimit == 0 {
+		xProp.rlimit = yProp.rlimit
 	}
-	if xLeftOff == 0 {
-		xLeftOff = yLeftOff
+	if xProp.leftOff == 0 {
+		xProp.leftOff = yProp.leftOff
+	}
+	if xProp.qj.leftOff == 0 {
+		xProp.qj.leftOff = yProp.qj.leftOff
+		xProp.qj.qvd.enable = yProp.qj.qvd.enable
 	}
 
-	return xPath, xLimit, xRlimit, xLeftOff
+	return xProp
 }
 
 // computeCallExpression does compile-time evaluations for the
 // CallExpression struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, helper *string, path string, limit uint64, rlimit uint64, leftOff int64, err error) {
+func computeCallExpression(call *CallExpression, prependPath string, qvd QueryValDirection) (jsonPath *jp.Expr, helper *string, prop Propagate, err error) {
 	if call.Parameters == nil {
 		// Not a function call
 		if call.Identifier != nil {
 			// Queries like `request.path == "x"`` goes here
-			path = *call.Identifier
+			prop.path = *call.Identifier
 		}
 		if call.SelectExpression != nil {
 			if call.SelectExpression.Index != nil {
 				// Queries like `request.path[0] == "x"`` goes here
-				path = fmt.Sprintf("%s[%d]", path, *call.SelectExpression.Index)
+				prop.path = fmt.Sprintf("%s[%d]", prop.path, *call.SelectExpression.Index)
 			} else if call.SelectExpression.Key != nil {
 				// Queries like `request.headers["x"] == "z"`` goes here
-				path = fmt.Sprintf("%s[\"%s\"]", path, strings.Trim(*call.SelectExpression.Key, "\""))
+				prop.path = fmt.Sprintf("%s[\"%s\"]", prop.path, strings.Trim(*call.SelectExpression.Key, "\""))
 			}
 
 			// Queries like `request.headers["x"].y == "z"`` goes here
 			if call.SelectExpression.Expression != nil {
-				_, limit, rlimit, leftOff, err = computeExpression(call.SelectExpression.Expression, path)
+				var _prop Propagate
+				_prop, err = computeExpression(call.SelectExpression.Expression, prop.path)
+				prop.limit = _prop.limit
+				prop.rlimit = _prop.rlimit
+				prop.leftOff = _prop.leftOff
 				return
 			}
 		}
 	} else {
 		// It's a function call
-		path = *call.Identifier
+		prop.path = *call.Identifier
 	}
 
 	// Build JSONPath
-	path = fmt.Sprintf("%s.%s", prependPath, path)
-	_jsonPath, err := jp.ParseString(path)
+	prop.path = fmt.Sprintf("%s.%s", prependPath, prop.path)
+	_jsonPath, err := jp.ParseString(prop.path)
+
+	// Compute query jump based on indexes
+	if qvd.enable {
+		prop.qj = computeQueryJump(prop.path, qvd)
+	}
 
 	// If it's a function call, determine the name of helper method.
 	if call.Parameters != nil {
-		segments := strings.Split(path, ".")
+		segments := strings.Split(prop.path, ".")
 		helper = &segments[len(segments)-1]
 		_jsonPath = _jsonPath[:len(_jsonPath)-1]
 
@@ -93,11 +133,11 @@ func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *
 				if err == nil {
 					switch *helper {
 					case "rlimit":
-						rlimit = uint64(float64Operand(v))
+						prop.rlimit = uint64(float64Operand(v))
 					case "limit":
-						limit = uint64(float64Operand(v))
+						prop.limit = uint64(float64Operand(v))
 					case "leftOff":
-						leftOff = int64(float64Operand(v))
+						prop.leftOff = int64(float64Operand(v))
 					}
 				}
 			}
@@ -111,11 +151,11 @@ func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *
 // computePrimary does compile-time evaluations for the
 // Primary struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computePrimary(pri *Primary, prependPath string) (path string, limit uint64, rlimit uint64, leftOff int64, err error) {
+func computePrimary(pri *Primary, prependPath string, qvd QueryValDirection) (prop Propagate, err error) {
 	if pri.SubExpression != nil {
-		path, limit, rlimit, leftOff, err = computeExpression(pri.SubExpression, prependPath)
+		prop, err = computeExpression(pri.SubExpression, prependPath)
 	} else if pri.CallExpression != nil {
-		pri.JsonPath, pri.Helper, path, limit, rlimit, leftOff, err = computeCallExpression(pri.CallExpression, prependPath)
+		pri.JsonPath, pri.Helper, prop, err = computeCallExpression(pri.CallExpression, prependPath, qvd)
 	} else if pri.Regex != nil {
 		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}
@@ -123,71 +163,89 @@ func computePrimary(pri *Primary, prependPath string) (path string, limit uint64
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeUnary(unar *Unary, prependPath string) (path string, limit uint64, rlimit uint64, leftOff int64, err error) {
-	var _path string
-	var _limit, _rlimit uint64
-	var _leftOff int64
+func computeUnary(unar *Unary, prependPath string, qvd QueryValDirection) (prop Propagate, err error) {
+	var _prop Propagate
 	if unar.Unary != nil {
-		path, limit, rlimit, leftOff, err = computeUnary(unar.Unary, prependPath)
+		prop, err = computeUnary(unar.Unary, prependPath, qvd)
 	} else {
-		_path, _limit, _rlimit, _leftOff, err = computePrimary(unar.Primary, prependPath)
-		path, limit, rlimit, leftOff = backpropagate(path, limit, rlimit, leftOff, _path, _limit, _rlimit, _leftOff)
+		_prop, err = computePrimary(unar.Primary, prependPath, qvd)
+		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeComparison(comp *Comparison, prependPath string) (path string, limit uint64, rlimit uint64, leftOff int64, err error) {
-	var _path string
-	var _limit, _rlimit uint64
-	var _leftOff int64
-	path, limit, rlimit, leftOff, err = computeUnary(comp.Unary, prependPath)
+func computeComparison(comp *Comparison, prependPath string, qvd QueryValDirection, disableQueryJump bool) (prop Propagate, err error) {
+	var _prop Propagate
+	var v int64
 	if comp.Next != nil {
-		_path, _limit, _rlimit, _leftOff, err = computeComparison(comp.Next, prependPath)
-		path, limit, rlimit, leftOff = backpropagate(path, limit, rlimit, leftOff, _path, _limit, _rlimit, _leftOff)
+		var next interface{}
+		next, _, err = evalComparison(comp.Next, nil)
+		if err != nil {
+			return
+		}
+		v = int64(float64Operand(next))
+	}
+	enableQueryJump := true
+	if disableQueryJump {
+		enableQueryJump = false
+	}
+	prop, err = computeUnary(comp.Unary, prependPath, QueryValDirection{v, comp.Op, comparisonGreater[comp.Op], enableQueryJump})
+	if comp.Next != nil {
+		_prop, err = computeComparison(comp.Next, prependPath, qvd, disableQueryJump)
+		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeEquality(equ *Equality, prependPath string) (path string, limit uint64, rlimit uint64, leftOff int64, err error) {
-	var _path string
-	var _limit, _rlimit uint64
-	var _leftOff int64
-	path, limit, rlimit, leftOff, err = computeComparison(equ.Comparison, prependPath)
+func computeEquality(equ *Equality, prependPath string, disableQueryJump bool) (prop Propagate, err error) {
+	var _prop Propagate
+	var v int64
 	if equ.Next != nil {
-		_path, _limit, _rlimit, _leftOff, err = computeEquality(equ.Next, prependPath)
-		path, limit, rlimit, leftOff = backpropagate(path, limit, rlimit, leftOff, _path, _limit, _rlimit, _leftOff)
+		var next interface{}
+		next, _, err = evalEquality(equ.Next, nil)
+		if err != nil {
+			return
+		}
+		v = int64(float64Operand(next))
+	}
+	prop, err = computeComparison(equ.Comparison, prependPath, QueryValDirection{v, equ.Op, true, equ.Op == "=="}, disableQueryJump)
+	if equ.Next != nil {
+		_prop, err = computeEquality(equ.Next, prependPath, disableQueryJump)
+		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeLogical(logic *Logical, prependPath string) (path string, limit uint64, rlimit uint64, leftOff int64, err error) {
-	var _path string
-	var _limit, _rlimit uint64
-	var _leftOff int64
-	path, limit, rlimit, leftOff, err = computeEquality(logic.Equality, prependPath)
+func computeLogical(logic *Logical, prependPath string) (prop Propagate, err error) {
+	var _prop Propagate
+	var disableQueryJump bool
+	if logic.Next != nil && logic.Op == "or" {
+		disableQueryJump = true
+	}
+	prop, err = computeEquality(logic.Equality, prependPath, disableQueryJump)
 	if logic.Next != nil {
-		_path, _limit, _rlimit, _leftOff, err = computeLogical(logic.Next, prependPath)
-		path, limit, rlimit, leftOff = backpropagate(path, limit, rlimit, leftOff, _path, _limit, _rlimit, _leftOff)
+		_prop, err = computeLogical(logic.Next, prependPath)
+		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeExpression(expr *Expression, prependPath string) (path string, limit uint64, rlimit uint64, leftOff int64, err error) {
+func computeExpression(expr *Expression, prependPath string) (prop Propagate, err error) {
 	if expr.Logical == nil {
 		return
 	}
-	path, limit, rlimit, leftOff, err = computeLogical(expr.Logical, prependPath)
+	prop, err = computeLogical(expr.Logical, prependPath)
 	return
 }
 
 // Precompute does compile-time evaluations on parsed query (AST/Expression)
 // to prevent unnecessary computations in Eval() method.
 // Modifies the fields of only the Primary struct.
-func Precompute(expr *Expression) (limit uint64, rlimit uint64, leftOff int64, err error) {
-	_, limit, rlimit, leftOff, err = computeExpression(expr, "")
+func Precompute(expr *Expression) (prop Propagate, err error) {
+	prop, err = computeExpression(expr, "")
 	return
 }

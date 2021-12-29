@@ -35,6 +35,7 @@ const (
 	CMD_FETCH    string = "/fetch"
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
+	CMD_INDEX    string = "/index"
 	CMD_LIMIT    string = "/limit"
 	CMD_METADATA string = "/metadata"
 )
@@ -114,6 +115,8 @@ func Single(host string, port string, id int) (data []byte, err error) {
 	return
 }
 
+// Fetch returns limit number of records by querying on either positive(future) or negative(past) direction
+// that starts from leftOff.
 func Fetch(host string, port string, leftOff int, direction int, query string, limit int, timeout time.Duration) (data [][]byte, meta []byte, err error) {
 	var c *Connection
 	c, err = NewConnection(host, port)
@@ -199,6 +202,38 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 
 	c.SendText(CMD_MACRO)
 	c.SendText(fmt.Sprintf("%s~%s", macro, expanded))
+
+	data := <-ret
+	text := string(data)
+	if text != "OK" {
+		err = errors.New(text)
+	}
+	c.Close()
+	return
+}
+
+// Index registers a JSONPath that will be indexed for each inserted data.
+// Using an indexed path speeds up the query. Note that;
+// - A query can boost itself only one indexed path expression like `year >= 1600`
+// - Only the left-most indexed path on a query is taken into account like `year >= 1600 and year <= 1700`
+// - A parent expression that contains `or` operator nullifies the benefit of the index like `year >= 1600 or name == "John"`
+// - path parameter cannot be an empty string.
+// - path parameter must be a valid JSONPath.
+func Index(host string, port string, path string) (err error) {
+	var c *Connection
+	c, err = NewConnection(host, port)
+	if err != nil {
+		return
+	}
+
+	ret := make(chan []byte)
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, c, ret, nil)
+	wg.Add(1)
+
+	c.SendText(CMD_INDEX)
+	c.SendText(fmt.Sprintf("%s", path))
 
 	data := <-ret
 	text := string(data)

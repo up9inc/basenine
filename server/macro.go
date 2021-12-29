@@ -11,12 +11,12 @@ import (
 	"github.com/dlclark/regexp2"
 )
 
-var macros map[string]string = make(map[string]string)
-
 // addMacro takes macro and its corresponding expanded version
 // as arguments. It stores the macro in a global map.
 func addMacro(macro string, expanded string) {
-	macros[macro] = fmt.Sprintf("(%s)", expanded)
+	cs.Lock()
+	cs.macros[macro] = fmt.Sprintf("(%s)", expanded)
+	cs.Unlock()
 }
 
 // expandMacro expands the macros in a given query, if there are any.
@@ -31,6 +31,9 @@ func expandMacros(query string) (string, error) {
 	}
 
 	var slice []pair
+	cs.RLock()
+	macros := cs.macros
+	cs.RUnlock()
 	for k, v := range macros {
 		slice = append(slice, pair{k, v})
 	}

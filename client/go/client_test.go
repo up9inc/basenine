@@ -41,6 +41,19 @@ func TestMacro(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestIndex(t *testing.T) {
+	err := Index(HOST, PORT, "year")
+	assert.Nil(t, err)
+}
+
+func TestIndexFalse(t *testing.T) {
+	err := Index(HOST, PORT, "")
+	assert.NotNil(t, err)
+
+	err = Index(HOST, PORT, "!.\"")
+	assert.NotNil(t, err)
+}
+
 func TestInsert(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 

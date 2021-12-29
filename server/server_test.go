@@ -353,6 +353,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
+		macros:         make(map[string]string),
 	}
 
 	server, client := net.Pipe()
@@ -416,6 +417,153 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	client.Write([]byte(fmt.Sprintf("%s\n", query)))
 
 	if waitTimeout(&wg, 1*time.Second) {
+		t.Fatal("Timed out waiting for wait group")
+	} else {
+		client.Close()
+		server.Close()
+
+		removeDatabaseFiles()
+	}
+}
+
+func TestServerProtocolIndexModeInsert(t *testing.T) {
+	cs = ConcurrentSlice{
+		partitionIndex: -1,
+		macros:         make(map[string]string),
+	}
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	f := newPartition()
+	assert.NotNil(t, f)
+
+	// Comment out the block below about indexing to disable its effect on performance
+	// the performance improvement 11.71s (indexed) vs. 12.20s (not indexed)
+	// while slowing down inserts from 9.51s to 9.71s
+	// INDEX BLOCK start
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/index\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", `year`)))
+	// INDEX BLOCK end
+
+	for index := 1000000; index < 2000000; index++ {
+		insertData([]byte(fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":%d}`, index)))
+	}
+
+	client.Close()
+	server.Close()
+}
+
+func TestServerProtocolIndexModeWithQueryMode(t *testing.T) {
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+		defer wg.Done()
+		index := 1999600
+		for {
+			scanner := bufio.NewScanner(conn)
+
+			for {
+				ok := scanner.Scan()
+				bytes := scanner.Bytes()
+
+				command := handleCommands(bytes)
+				if command {
+					break
+				}
+
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":%d}`, index-1000000, index)
+				index++
+				assert.Equal(t, expected, string(bytes))
+
+				if index > 1999999 {
+					return
+				}
+
+				assert.True(t, ok)
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, client)
+	wg.Add(1)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/query\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", `year >= 1999600`)))
+
+	if waitTimeout(&wg, 100*time.Second) {
+		t.Fatal("Timed out waiting for wait group")
+	} else {
+		client.Close()
+		server.Close()
+	}
+}
+
+func TestServerProtocolIndexModeWithFetchMode(t *testing.T) {
+	leftOff := -1
+	direction := -1
+	query := `year <= 1000500`
+	limit := 100
+
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
+		defer wg.Done()
+		index := 1000500
+		for {
+			scanner := bufio.NewScanner(conn)
+
+			for {
+				ok := scanner.Scan()
+				bytes := scanner.Bytes()
+
+				command := handleCommands(bytes)
+				if command {
+					break
+				}
+
+				index--
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":%d}`, index-1000000, index)
+				assert.Equal(t, expected, string(bytes))
+
+				if index < 1000401 {
+					return
+				}
+
+				assert.True(t, ok)
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, client)
+	wg.Add(1)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("/fetch\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", leftOff)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", direction)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", query)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", limit)))
+
+	if waitTimeout(&wg, 10*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	} else {
 		client.Close()
