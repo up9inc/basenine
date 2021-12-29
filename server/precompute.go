@@ -116,7 +116,9 @@ func computeCallExpression(call *CallExpression, prependPath string, qvd QueryVa
 	_jsonPath, err := jp.ParseString(prop.path)
 
 	// Compute query jump based on indexes
-	prop.qj = computeQueryJump(prop.path, qvd)
+	if qvd.enable {
+		prop.qj = computeQueryJump(prop.path, qvd)
+	}
 
 	// If it's a function call, determine the name of helper method.
 	if call.Parameters != nil {
@@ -172,7 +174,7 @@ func computeUnary(unar *Unary, prependPath string, qvd QueryValDirection) (prop 
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeComparison(comp *Comparison, prependPath string, qvd QueryValDirection) (prop Propagate, err error) {
+func computeComparison(comp *Comparison, prependPath string, qvd QueryValDirection, disableQueryJump bool) (prop Propagate, err error) {
 	var _prop Propagate
 	var v float64
 	if comp.Next != nil {
@@ -183,16 +185,20 @@ func computeComparison(comp *Comparison, prependPath string, qvd QueryValDirecti
 		}
 		v = float64Operand(next)
 	}
-	prop, err = computeUnary(comp.Unary, prependPath, QueryValDirection{v, comp.Op, comparisonGreater[comp.Op], true})
+	enableQueryJump := true
+	if disableQueryJump {
+		enableQueryJump = false
+	}
+	prop, err = computeUnary(comp.Unary, prependPath, QueryValDirection{v, comp.Op, comparisonGreater[comp.Op], enableQueryJump})
 	if comp.Next != nil {
-		_prop, err = computeComparison(comp.Next, prependPath, qvd)
+		_prop, err = computeComparison(comp.Next, prependPath, qvd, disableQueryJump)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeEquality(equ *Equality, prependPath string) (prop Propagate, err error) {
+func computeEquality(equ *Equality, prependPath string, disableQueryJump bool) (prop Propagate, err error) {
 	var _prop Propagate
 	var v float64
 	if equ.Next != nil {
@@ -203,9 +209,9 @@ func computeEquality(equ *Equality, prependPath string) (prop Propagate, err err
 		}
 		v = float64Operand(next)
 	}
-	prop, err = computeComparison(equ.Comparison, prependPath, QueryValDirection{v, equ.Op, true, equ.Op == "=="})
+	prop, err = computeComparison(equ.Comparison, prependPath, QueryValDirection{v, equ.Op, true, equ.Op == "=="}, disableQueryJump)
 	if equ.Next != nil {
-		_prop, err = computeEquality(equ.Next, prependPath)
+		_prop, err = computeEquality(equ.Next, prependPath, disableQueryJump)
 		prop = backpropagate(prop, _prop)
 	}
 	return
@@ -214,7 +220,11 @@ func computeEquality(equ *Equality, prependPath string) (prop Propagate, err err
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeLogical(logic *Logical, prependPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	prop, err = computeEquality(logic.Equality, prependPath)
+	var disableQueryJump bool
+	if logic.Next != nil && logic.Op == "or" {
+		disableQueryJump = true
+	}
+	prop, err = computeEquality(logic.Equality, prependPath, disableQueryJump)
 	if logic.Next != nil {
 		_prop, err = computeLogical(logic.Next, prependPath)
 		prop = backpropagate(prop, _prop)
