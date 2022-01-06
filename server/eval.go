@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ohler55/ojg/jp"
 	oj "github.com/ohler55/ojg/oj"
 )
 
@@ -190,6 +191,19 @@ func leftOff(args ...interface{}) interface{} {
 	return true
 }
 
+func _json(args ...interface{}) interface{} {
+	obj, err := oj.ParseString(string(stringOperand(args[0])))
+	if err != nil {
+		return false
+	}
+	result := args[1].(*jp.Expr).Get(obj)
+
+	if len(result) < 1 {
+		return false
+	}
+	return result[0]
+}
+
 // Map of helper methods
 var helpers = map[string]interface{}{
 	"startsWith": startsWith,
@@ -199,13 +213,18 @@ var helpers = map[string]interface{}{
 	"limit":      limit,
 	"rlimit":     rlimit,
 	"leftOff":    leftOff,
+	"json":       _json,
 }
 
 // Iterates and evaulates each parameter of a given function call
 func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err error) {
 	for _, param := range params {
 		var v interface{}
-		v, err = evalExpression(param.Expression, obj)
+		if param.JsonPath != nil {
+			v = param.JsonPath
+		} else {
+			v, err = evalExpression(param.Expression, obj)
+		}
 		vs = append(vs, v)
 	}
 	return

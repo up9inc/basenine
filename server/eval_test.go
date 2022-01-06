@@ -104,6 +104,12 @@ var data = []struct {
 	{`datetime()`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"timestamp":1634668524000}`, false, 0, 0, 0},
 	{`!brand.name.startsWith("Chev")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0, 0, 0},
 	{`!brand.name.startsWith("hev")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 0, 0, 0},
+	{`response.body.json().brand.name == "Chevrolet"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, true, 0, 0, 0},
+	{`response.body.json().brand.name == "ChevroletX"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, false, 0, 0, 0},
+	{`response.body.json().trend.name == "Chevrolet"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, false, 0, 0, 0},
+	{`response.body.json().brand.name == "Chevrolet"`, `{"response":{"body":"INVALID JSON"}}`, false, 0, 0, 0},
+	{`response.body.json() == "INVALID JSON"`, `{"response":{"body":"INVALID JSON"}}`, false, 0, 0, 0},
+	{`response.body.json().key[0] == "api"`, `{"response":{"body":"{\"key\":[\"api\",\"v1\",\"example\"]}"}}`, true, 0, 0, 0},
 }
 
 func TestEval(t *testing.T) {

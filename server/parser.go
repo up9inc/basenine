@@ -67,6 +67,7 @@ type SelectExpression struct {
 type Parameter struct {
 	Tag        *string     `[ @Ident ":" ]`
 	Expression *Expression `@@`
+	JsonPath   *jp.Expr
 }
 
 var parser = participle.MustBuild(&Expression{}, participle.UseLookahead(2))
