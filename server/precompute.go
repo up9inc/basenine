@@ -65,25 +65,42 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 			prop.path = *call.Identifier
 		}
 		if call.SelectExpression != nil {
+			segments := strings.Split(prop.path, ".")
+			potentialHelper := &segments[len(segments)-1]
+			// Determine whether the .json() helper is used or not
+			jsonHelperUsed := false
+			if *potentialHelper == "json" {
+				helper = potentialHelper
+				jsonHelperUsed = true
+			}
+
 			if call.SelectExpression.Index != nil {
 				// Queries like `request.path[0] == "x"`` goes here
-				prop.path = fmt.Sprintf("%s[%d]", prop.path, *call.SelectExpression.Index)
+				if jsonHelperUsed {
+					jsonPathParam, err := jp.ParseString(fmt.Sprintf("[%d]", *call.SelectExpression.Index))
+					if err == nil {
+						call.Parameters = []*Parameter{{JsonPath: &jsonPathParam}}
+					}
+					jsonHelper = false
+				} else {
+					prop.path = fmt.Sprintf("%s[%d]", prop.path, *call.SelectExpression.Index)
+				}
 			} else if call.SelectExpression.Key != nil {
 				// Queries like `request.headers["x"] == "z"`` goes here
-				prop.path = fmt.Sprintf("%s[\"%s\"]", prop.path, strings.Trim(*call.SelectExpression.Key, "\""))
+				if jsonHelperUsed {
+					jsonPathParam, err := jp.ParseString(fmt.Sprintf("[\"%s\"]", strings.Trim(*call.SelectExpression.Key, "\"")))
+					if err == nil {
+						call.Parameters = []*Parameter{{JsonPath: &jsonPathParam}}
+					}
+					jsonHelper = false
+				} else {
+					prop.path = fmt.Sprintf("%s[\"%s\"]", prop.path, strings.Trim(*call.SelectExpression.Key, "\""))
+				}
 			}
 
 			// Queries like `request.headers["x"].y == "z"`` or `request.body.json().some.path` goes here
 			if call.SelectExpression.Expression != nil {
 				var _prop Propagate
-
-				segments := strings.Split(prop.path, ".")
-				helper = &segments[len(segments)-1]
-				// Determine whether the .json() helper is used or not
-				jsonHelperUsed := false
-				if *helper == "json" {
-					jsonHelperUsed = true
-				}
 				_prop, err = computeExpression(call.SelectExpression.Expression, prop.path, jsonHelperUsed)
 				prop.limit = _prop.limit
 				prop.rlimit = _prop.rlimit

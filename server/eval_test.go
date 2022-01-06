@@ -110,6 +110,10 @@ var data = []struct {
 	{`response.body.json().brand.name == "Chevrolet"`, `{"response":{"body":"INVALID JSON"}}`, false, 0, 0, 0},
 	{`response.body.json() == "INVALID JSON"`, `{"response":{"body":"INVALID JSON"}}`, false, 0, 0, 0},
 	{`response.body.json().key[0] == "api"`, `{"response":{"body":"{\"key\":[\"api\",\"v1\",\"example\"]}"}}`, true, 0, 0, 0},
+	{`response.body.json()[0] == "api"`, `{"response":{"body":"[\"api\",\"v1\",\"example\"]"}}`, true, 0, 0, 0},
+	{`response.body.json()[0] == "v1"`, `{"response":{"body":"[\"api\",\"v1\",\"example\"]"}}`, false, 0, 0, 0},
+	{`response.body.json()["model"] == "Camaro"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, true, 0, 0, 0},
+	{`response.body.json()["model"] == "CamaroX"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, false, 0, 0, 0},
 }
 
 func TestEval(t *testing.T) {
