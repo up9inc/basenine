@@ -67,8 +67,6 @@ type ConnectionMode int
 // MACRO is short lasting TCP connection mode for setting a macro that will be expanded
 // later on for each individual query.
 //
-// INDEX is short lasting TCP connection mode for registering an indexed path
-//
 // LIMIT is short lasting TCP connection mode for setting the maximum database size
 // to limit the disk usage.
 const (
@@ -79,7 +77,6 @@ const (
 	FETCH
 	VALIDATE
 	MACRO
-	INDEX
 	LIMIT
 )
 
@@ -93,7 +90,6 @@ const (
 	CMD_FETCH    string = "/fetch"
 	CMD_VALIDATE string = "/validate"
 	CMD_MACRO    string = "/macro"
-	CMD_INDEX    string = "/index"
 	CMD_LIMIT    string = "/limit"
 	CMD_METADATA string = "/metadata"
 )
@@ -134,21 +130,7 @@ type ConcurrentSlice struct {
 	truncatedTimestamp    int64
 	removedOffsetsCounter int
 	macros                map[string]string
-	indexes               []string
-	indexedPaths          []jp.Expr
-	indexedValues         []SortIndexedValues
 }
-
-type IndexedValue struct {
-	Real    int64
-	LeftOff int
-}
-
-type SortIndexedValues []IndexedValue
-
-func (x SortIndexedValues) Len() int           { return len(x) }
-func (x SortIndexedValues) Less(i, j int) bool { return x[i].Real < x[j].Real }
-func (x SortIndexedValues) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
 type ConcurrentSliceExport struct {
@@ -161,8 +143,6 @@ type ConcurrentSliceExport struct {
 	TruncatedTimestamp    int64
 	RemovedOffsetsCounter int
 	Macros                map[string]string
-	Indexes               []string
-	IndexedValues         []SortIndexedValues
 }
 
 // Core dump filename
@@ -310,8 +290,6 @@ func dumpCore(silent bool, dontLock bool) {
 	csExport.TruncatedTimestamp = cs.truncatedTimestamp
 	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
 	csExport.Macros = cs.macros
-	csExport.Indexes = cs.indexes
-	csExport.IndexedValues = cs.indexedValues
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -364,15 +342,6 @@ func restoreCore() {
 	cs.truncatedTimestamp = csExport.TruncatedTimestamp
 	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
 	cs.macros = csExport.Macros
-	cs.indexes = csExport.Indexes
-	cs.indexedValues = csExport.IndexedValues
-
-	for _, path := range csExport.Indexes {
-		var indexedPath jp.Expr
-		indexedPath, err = jp.ParseString(path)
-		check(err)
-		cs.indexedPaths = append(cs.indexedPaths, indexedPath)
-	}
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 }
@@ -574,8 +543,6 @@ func handleConnection(conn net.Conn) {
 			validateQuery(conn, data)
 		case MACRO:
 			applyMacro(conn, data)
-		case INDEX:
-			registerIndex(conn, data)
 		case LIMIT:
 			setLimit(conn, data)
 		}
@@ -623,9 +590,6 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 		case strings.HasPrefix(message, CMD_MACRO):
 			mode = MACRO
 
-		case strings.HasPrefix(message, CMD_INDEX):
-			mode = INDEX
-
 		case strings.HasPrefix(message, CMD_LIMIT):
 			mode = LIMIT
 
@@ -667,9 +631,6 @@ func insertData(data []byte) {
 
 	// Set "id" field to the index of the record.
 	d["id"] = l
-
-	// Update and sort the indexes
-	handleIndexedInsertion(d, l)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -831,13 +792,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	leftOff := prop.leftOff
 
 	leftOff = handleNegativeLeftOff(leftOff)
-
-	// Get the leftOff value computed on compile-time
-	// based on the indexes if leftOff() helper is not used
-	// or its value is 0 or negative
-	if prop.qj.qvd.enable && prop.leftOff < 1 {
-		leftOff = int64(prop.qj.leftOff)
-	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
@@ -1090,20 +1044,7 @@ func fetch(conn net.Conn, args []string) {
 	}
 
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
-	expr, prop, err := prepareQuery(conn, query)
-
-	// Get the leftOff value computed on compile-time
-	// based on the indexes if leftOff() helper is not used
-	// or its value is 0 or negative
-	// Also check if the direction of the query matches the
-	// direction of the expression.
-	if prop.qj.qvd.enable && _leftOff < 1 {
-		if direction < 0 && !prop.qj.qvd.direction {
-			leftOff = int64(prop.qj.leftOff)
-		} else if direction >= 0 && prop.qj.qvd.direction {
-			leftOff = int64(prop.qj.leftOff)
-		}
-	}
+	expr, _, err := prepareQuery(conn, query)
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
@@ -1278,24 +1219,6 @@ func applyMacro(conn net.Conn, data []byte) {
 	expanded := strings.TrimSpace(s[1])
 
 	addMacro(macro, expanded)
-
-	conn.Write([]byte(fmt.Sprintf("OK\n")))
-}
-
-// registerIndex registers an index that speeds up queries
-func registerIndex(conn net.Conn, data []byte) {
-	path := string(data)
-
-	if len(path) < 1 {
-		conn.Write([]byte("Error: The indexed path cannot be empty!\n"))
-		return
-	}
-
-	err := addIndex(path)
-	if err != nil {
-		conn.Write([]byte(fmt.Sprintf("Error while registering the index: %v\n", err)))
-		return
-	}
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }

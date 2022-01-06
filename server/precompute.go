@@ -23,26 +23,6 @@ type Propagate struct {
 	limit   uint64
 	rlimit  uint64
 	leftOff int64
-	qj      QueryJump
-}
-
-var comparisonGreater = map[string]bool{
-	">":  true,
-	"<":  false,
-	">=": true,
-	"<=": false,
-}
-
-type QueryValDirection struct {
-	value     int64
-	operator  string
-	direction bool
-	enable    bool
-}
-
-type QueryJump struct {
-	leftOff int
-	qvd     QueryValDirection
 }
 
 // strContains checks if a string is present in a slice
@@ -70,10 +50,6 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 	if xProp.leftOff == 0 {
 		xProp.leftOff = yProp.leftOff
 	}
-	if xProp.qj.leftOff == 0 {
-		xProp.qj.leftOff = yProp.qj.leftOff
-		xProp.qj.qvd.enable = yProp.qj.qvd.enable
-	}
 
 	return xProp
 }
@@ -81,7 +57,7 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 // computeCallExpression does compile-time evaluations for the
 // CallExpression struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computeCallExpression(call *CallExpression, prependPath string, qvd QueryValDirection) (jsonPath *jp.Expr, helper *string, prop Propagate, err error) {
+func computeCallExpression(call *CallExpression, prependPath string) (jsonPath *jp.Expr, helper *string, prop Propagate, err error) {
 	if call.Parameters == nil {
 		// Not a function call
 		if call.Identifier != nil {
@@ -116,11 +92,6 @@ func computeCallExpression(call *CallExpression, prependPath string, qvd QueryVa
 	prop.path = fmt.Sprintf("%s.%s", prependPath, prop.path)
 	_jsonPath, err := jp.ParseString(prop.path)
 
-	// Compute query jump based on indexes
-	if qvd.enable {
-		prop.qj = computeQueryJump(prop.path, qvd)
-	}
-
 	// If it's a function call, determine the name of helper method.
 	if call.Parameters != nil {
 		segments := strings.Split(prop.path, ".")
@@ -151,11 +122,11 @@ func computeCallExpression(call *CallExpression, prependPath string, qvd QueryVa
 // computePrimary does compile-time evaluations for the
 // Primary struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computePrimary(pri *Primary, prependPath string, qvd QueryValDirection) (prop Propagate, err error) {
+func computePrimary(pri *Primary, prependPath string) (prop Propagate, err error) {
 	if pri.SubExpression != nil {
 		prop, err = computeExpression(pri.SubExpression, prependPath)
 	} else if pri.CallExpression != nil {
-		pri.JsonPath, pri.Helper, prop, err = computeCallExpression(pri.CallExpression, prependPath, qvd)
+		pri.JsonPath, pri.Helper, prop, err = computeCallExpression(pri.CallExpression, prependPath)
 	} else if pri.Regex != nil {
 		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}
@@ -163,56 +134,34 @@ func computePrimary(pri *Primary, prependPath string, qvd QueryValDirection) (pr
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeUnary(unar *Unary, prependPath string, qvd QueryValDirection) (prop Propagate, err error) {
+func computeUnary(unar *Unary, prependPath string) (prop Propagate, err error) {
 	var _prop Propagate
 	if unar.Unary != nil {
-		prop, err = computeUnary(unar.Unary, prependPath, qvd)
+		prop, err = computeUnary(unar.Unary, prependPath)
 	} else {
-		_prop, err = computePrimary(unar.Primary, prependPath, qvd)
+		_prop, err = computePrimary(unar.Primary, prependPath)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeComparison(comp *Comparison, prependPath string, qvd QueryValDirection, disableQueryJump bool) (prop Propagate, err error) {
+func computeComparison(comp *Comparison, prependPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	var v int64
+	prop, err = computeUnary(comp.Unary, prependPath)
 	if comp.Next != nil {
-		var next interface{}
-		next, _, err = evalComparison(comp.Next, nil)
-		if err != nil {
-			return
-		}
-		v = int64(float64Operand(next))
-	}
-	enableQueryJump := true
-	if disableQueryJump {
-		enableQueryJump = false
-	}
-	prop, err = computeUnary(comp.Unary, prependPath, QueryValDirection{v, comp.Op, comparisonGreater[comp.Op], enableQueryJump})
-	if comp.Next != nil {
-		_prop, err = computeComparison(comp.Next, prependPath, qvd, disableQueryJump)
+		_prop, err = computeComparison(comp.Next, prependPath)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeEquality(equ *Equality, prependPath string, disableQueryJump bool) (prop Propagate, err error) {
+func computeEquality(equ *Equality, prependPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	var v int64
+	prop, err = computeComparison(equ.Comparison, prependPath)
 	if equ.Next != nil {
-		var next interface{}
-		next, _, err = evalEquality(equ.Next, nil)
-		if err != nil {
-			return
-		}
-		v = int64(float64Operand(next))
-	}
-	prop, err = computeComparison(equ.Comparison, prependPath, QueryValDirection{v, equ.Op, true, equ.Op == "=="}, disableQueryJump)
-	if equ.Next != nil {
-		_prop, err = computeEquality(equ.Next, prependPath, disableQueryJump)
+		_prop, err = computeEquality(equ.Next, prependPath)
 		prop = backpropagate(prop, _prop)
 	}
 	return
@@ -221,11 +170,7 @@ func computeEquality(equ *Equality, prependPath string, disableQueryJump bool) (
 // Gateway method for doing compile-time evaluations on Primary struct
 func computeLogical(logic *Logical, prependPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	var disableQueryJump bool
-	if logic.Next != nil && logic.Op == "or" {
-		disableQueryJump = true
-	}
-	prop, err = computeEquality(logic.Equality, prependPath, disableQueryJump)
+	prop, err = computeEquality(logic.Equality, prependPath)
 	if logic.Next != nil {
 		_prop, err = computeLogical(logic.Next, prependPath)
 		prop = backpropagate(prop, _prop)

@@ -57,8 +57,6 @@ starting from a certain offset, supporting both directions.
 
 - **Macro mode** let's you define a macro for the query language like `http~proto.name == "http"`.
 
-- **Index mode** let's you register a JSONPath that will be indexed for each inserted data.
-
 - **Limit mode** allows you to set a hard-limit for the database size in bytes like `100000000` (100MB).
 The disk usage ranges between `50000000` (50MB) and `100000000` (100MB).
 So the actual effective limit is the half of this value.
