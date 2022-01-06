@@ -81,6 +81,10 @@ func computeQueryJump(path string, qvd QueryValDirection) QueryJump {
 				}
 			})
 
+			if j >= len(index) {
+				j = len(index) - 1
+			}
+
 			return QueryJump{
 				leftOff: index[j].LeftOff,
 				qvd:     qvd,

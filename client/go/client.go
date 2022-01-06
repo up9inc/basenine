@@ -216,7 +216,7 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 // Using an indexed path speeds up the query. Note that;
 // - A query can boost itself only one indexed path expression like `year >= 1600`
 // - Only the left-most indexed path on a query is taken into account like `year >= 1600 and year <= 1700`
-// - A parent expression that contains `or` operator nullifies the benefit of the index like `year >= 1600 or name == "John"`
+// - A parent expression that contains `or` operator nullifies the benefit of the index like `year >= 1600 or brand.name == "Chevrolet"`
 // - path parameter cannot be an empty string.
 // - path parameter must be a valid JSONPath.
 func Index(host string, port string, path string) (err error) {
