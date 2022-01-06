@@ -185,25 +185,6 @@ if err != nil {
 }
 ```
 
-Index:
-
-Index registers a JSONPath that will be indexed for each inserted data.
-Using an indexed path speeds up the query. Note that;
-
-- A query can boost itself only one indexed path expression like `year >= 1600`
-- Only the left-most indexed path on a query is taken into account like `year >= 1600 and year <= 1700`
-- A parent expression that contains `or` operator nullifies the benefit of the index like `year >= 1600 or name == "John"`
-- `path` parameter cannot be an empty string.
-- `path` parameter must be a valid JSONPath.
-
-```go
-// Define a macro `chevy` expands into `brand.name == "Chevrolet"`
-err := Index("localhost", "9099", "year")
-if err != nil {
-    // handle error
-}
-```
-
 Limit:
 
 ```go
