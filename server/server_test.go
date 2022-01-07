@@ -78,7 +78,7 @@ func TestServerInsertAndReadData(t *testing.T) {
 		b, n, err := readRecord(rf, n)
 		assert.Nil(t, err)
 		assert.Greater(t, n, int64(0))
-		assert.Equal(t, expected, string(b))
+		assert.JSONEq(t, expected, string(b))
 
 		rf.Close()
 	}
@@ -126,7 +126,7 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	b, n, err := readRecord(rf, n)
 	assert.Nil(t, err)
 	assert.Greater(t, n, int64(0))
-	assert.Equal(t, expected, string(b))
+	assert.JSONEq(t, expected, string(b))
 
 	rf.Close()
 
@@ -189,7 +189,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 
 					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 					index++
-					assert.Equal(t, expected, string(bytes))
+					assert.JSONEq(t, expected, string(bytes))
 
 					if index > (row.limit - 1) {
 						return
@@ -254,7 +254,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 				}
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
-				assert.Equal(t, expected, string(bytes))
+				assert.JSONEq(t, expected, string(bytes))
 
 				assert.True(t, ok)
 				return
@@ -395,7 +395,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 				index++
-				assert.Equal(t, expected, string(bytes))
+				assert.JSONEq(t, expected, string(bytes))
 
 				if index > 99 {
 					return
@@ -488,7 +488,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 					} else {
 						index++
 					}
-					assert.Equal(t, expected, string(bytes))
+					assert.JSONEq(t, expected, string(bytes))
 
 					counter++
 

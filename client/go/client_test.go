@@ -59,7 +59,7 @@ func TestSingle(t *testing.T) {
 	assert.Nil(t, err)
 
 	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
-	assert.Equal(t, expected, string(data))
+	assert.JSONEq(t, expected, string(data))
 }
 
 func TestValidate(t *testing.T) {
@@ -100,7 +100,7 @@ func TestQuery(t *testing.T) {
 			text := string(ret)
 
 			index++
-			assert.Equal(t, `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`, text)
+			assert.JSONEq(t, `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`, text)
 
 			if index > 14000 {
 				c.Close()
@@ -147,7 +147,7 @@ func TestFetch(t *testing.T) {
 	i := 0
 	for id := 99; id > 80; id-- {
 		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
-		assert.Equal(t, expected, string(data[i]))
+		assert.JSONEq(t, expected, string(data[i]))
 		i++
 	}
 }

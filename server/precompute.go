@@ -136,7 +136,8 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 
 		if strContains(compileTimeEvaluatedHelpers, *helper) {
 			if len(call.Parameters) > 0 {
-				v, err := evalExpression(call.Parameters[0].Expression, nil)
+				// We don't alter the record on compile-time. So the second record value is disabled
+				v, _, err := evalExpression(call.Parameters[0].Expression, nil)
 				if err == nil {
 					switch *helper {
 					case "rlimit":

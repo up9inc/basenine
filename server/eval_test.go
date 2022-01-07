@@ -131,7 +131,8 @@ func TestEval(t *testing.T) {
 		assert.Equal(t, row.rlimit, prop.rlimit)
 		assert.Equal(t, row.leftOff, prop.leftOff)
 		// repr.Println(expr)
-		truth, err := Eval(expr, row.json)
+		// TODO: Use the second return value to test record altering helpers
+		truth, _, err := Eval(expr, row.json)
 		if err != nil {
 			t.Fatal(err.Error())
 		}

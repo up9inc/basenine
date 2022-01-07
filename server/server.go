@@ -889,7 +889,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 
 			// Evaluate the current record against the given query.
-			truth, err := Eval(expr, string(b))
+			truth, record, err := Eval(expr, string(b))
 			check(err)
 
 			// Write the record into TCP connection if it passes the query.
@@ -898,7 +898,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 					rlimitOffsetQueue = append(rlimitOffsetQueue, offset)
 					rlimitPartitionRefQueue = append(rlimitPartitionRefQueue, partitionRef)
 				} else {
-					_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+					_, err := conn.Write([]byte(fmt.Sprintf("%s\n", record)))
 					if err != nil {
 						log.Printf("Write error: %v\n", err)
 						break
@@ -1159,7 +1159,7 @@ func fetch(conn net.Conn, args []string) {
 		}
 
 		// Evaluate the current record against the given query.
-		truth, err := Eval(expr, string(b))
+		truth, record, err := Eval(expr, string(b))
 		check(err)
 
 		metadata, _ = json.Marshal(Metadata{
@@ -1178,7 +1178,7 @@ func fetch(conn net.Conn, args []string) {
 
 		// Write the record into TCP connection if it passes the query.
 		if truth {
-			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", record)))
 			if err != nil {
 				log.Printf("Write error: %v\n", err)
 				break
