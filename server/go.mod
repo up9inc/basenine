@@ -7,5 +7,5 @@ require (
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/ohler55/ojg v1.12.7
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.7.0
 )
