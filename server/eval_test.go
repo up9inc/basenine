@@ -115,6 +115,11 @@ var data = []struct {
 	{`response.body.json()[0] == "v1"`, `{"response":{"body":"[\"api\",\"v1\",\"example\"]"}}`, false, 0, 0, 0, `{"response":{"body":"[\"api\",\"v1\",\"example\"]"}}`},
 	{`response.body.json()["model"] == "Camaro"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, true, 0, 0, 0, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`},
 	{`response.body.json()["model"] == "CamaroX"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, false, 0, 0, 0, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`},
+	{`id == 114905 and redact("model", "brand.name")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 0, 0, 0, fmt.Sprintf(`{"id":114905,"model":"%s","brand":{"name":"%s"},"year":2021}`, redacted, redacted)},
+	{`id == 114905 and redact("modelx", "brand.name")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, true, 0, 0, 0, fmt.Sprintf(`{"id":114905,"model":"Camaro","brand":{"name":"%s"},"year":2021}`, redacted)},
+	{`id == 114906 and redact("model", "brand.name")`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0, 0, 0, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`},
+	{`redact("model", "brand.name") and id == 114906`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0, 0, 0, fmt.Sprintf(`{"id":114905,"model":"%s","brand":{"name":"%s"},"year":2021}`, redacted, redacted)},
+	{`redact("id", "brand.name") and id == 114905`, `{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"year":2021}`, false, 0, 0, 0, fmt.Sprintf(`{"id":"%s","model":"Camaro","brand":{"name":"%s"},"year":2021}`, redacted, redacted)},
 }
 
 func TestEval(t *testing.T) {

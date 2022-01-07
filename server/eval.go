@@ -14,6 +14,8 @@ import (
 	oj "github.com/ohler55/ojg/oj"
 )
 
+const redacted = "[REDACTED]"
+
 // bool operand evaluator. Boolean literals falls into this method.
 func boolOperand(operand interface{}) bool {
 	var _operand bool
@@ -192,7 +194,7 @@ func leftOff(args ...interface{}) (interface{}, interface{}) {
 }
 
 func _json(args ...interface{}) (interface{}, interface{}) {
-	obj, err := oj.ParseString(string(stringOperand(args[1])))
+	obj, err := oj.ParseString(stringOperand(args[1]))
 	if err != nil {
 		return args[0], false
 	}
@@ -202,6 +204,22 @@ func _json(args ...interface{}) (interface{}, interface{}) {
 		return args[0], false
 	}
 	return args[0], result[0]
+}
+
+func redact(args ...interface{}) (interface{}, interface{}) {
+	obj := args[0]
+	for _, param := range args[2:] {
+		jsonPath, err := jp.ParseString(stringOperand(param))
+		if err != nil {
+			continue
+		}
+		result := jsonPath.Get(obj)
+		if len(result) < 1 {
+			continue
+		}
+		jsonPath.Set(obj, redacted)
+	}
+	return obj, true
 }
 
 // Map of helper methods
@@ -214,6 +232,7 @@ var helpers = map[string]interface{}{
 	"rlimit":     rlimit,
 	"leftOff":    leftOff,
 	"json":       _json,
+	"redact":     redact,
 }
 
 // Iterates and evaulates each parameter of a given function call
