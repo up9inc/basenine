@@ -15,6 +15,8 @@ import (
 	oj "github.com/ohler55/ojg/oj"
 )
 
+const redacted = "[REDACTED]"
+
 // bool operand evaluator. Boolean literals falls into this method.
 func boolOperand(operand interface{}) bool {
 	var _operand bool
@@ -149,51 +151,51 @@ var comparisonOperations = map[string]interface{}{
 	"<=": leq,
 }
 
-func startsWith(args ...interface{}) interface{} {
-	return strings.HasPrefix(stringOperand(args[0]), stringOperand(args[1]))
+func startsWith(args ...interface{}) (interface{}, interface{}) {
+	return args[0], strings.HasPrefix(stringOperand(args[1]), stringOperand(args[2]))
 }
 
-func endsWith(args ...interface{}) interface{} {
-	return strings.HasSuffix(stringOperand(args[0]), stringOperand(args[1]))
+func endsWith(args ...interface{}) (interface{}, interface{}) {
+	return args[0], strings.HasSuffix(stringOperand(args[1]), stringOperand(args[2]))
 }
 
-func contains(args ...interface{}) interface{} {
-	return strings.Contains(stringOperand(args[0]), stringOperand(args[1]))
+func contains(args ...interface{}) (interface{}, interface{}) {
+	return args[0], strings.Contains(stringOperand(args[1]), stringOperand(args[2]))
 }
 
-func datetime(args ...interface{}) interface{} {
+func datetime(args ...interface{}) (interface{}, interface{}) {
 	layout := "1/2/2006, 3:04:05.000 PM"
-	t, err := time.Parse(layout, stringOperand(args[1]))
+	t, err := time.Parse(layout, stringOperand(args[2]))
 	if err != nil {
-		return false
+		return args[0], false
 	} else {
 		// Timestamp is an integer like 1635190131000
 		timestamp := t.UnixNano() / int64(time.Millisecond)
-		return timestamp
+		return args[0], timestamp
 	}
 }
 
-func limit(args ...interface{}) interface{} {
+func limit(args ...interface{}) (interface{}, interface{}) {
 	// Returns true no matter what. Evaluated on compile-time,
 	// limits the number of records returned as a result of the query.
-	return true
+	return args[0], true
 }
 
-func rlimit(args ...interface{}) interface{} {
+func rlimit(args ...interface{}) (interface{}, interface{}) {
 	// Returns true no matter what. Evaluated on compile-time,
 	// limits the number of records returned as a result of the query in reverse
 	// but in a weird way such that it limits the past.
-	return true
+	return args[0], true
 }
 
-func leftOff(args ...interface{}) interface{} {
+func leftOff(args ...interface{}) (interface{}, interface{}) {
 	// Returns true no matter what. Evaluated on compile-time,
 	// starts the query from given index.
-	return true
+	return args[0], true
 }
 
-func _json(args ...interface{}) interface{} {
-	jsonString := string(stringOperand(args[0]))
+func _json(args ...interface{}) (interface{}, interface{}) {
+	jsonString := string(stringOperand(args[1]))
 
 	// Try to base64 decode the JSON string
 	base64Decoded, err := base64.StdEncoding.DecodeString(jsonString)
@@ -203,14 +205,30 @@ func _json(args ...interface{}) interface{} {
 
 	obj, err := oj.ParseString(jsonString)
 	if err != nil {
-		return false
+		return args[0], false
 	}
-	result := args[1].(*jp.Expr).Get(obj)
+	result := args[2].(*jp.Expr).Get(obj)
 
 	if len(result) < 1 {
-		return false
+		return args[0], false
 	}
-	return result[0]
+	return args[0], result[0]
+}
+
+func redact(args ...interface{}) (interface{}, interface{}) {
+	obj := args[0]
+	for _, param := range args[2:] {
+		jsonPath, err := jp.ParseString(stringOperand(param))
+		if err != nil {
+			continue
+		}
+		result := jsonPath.Get(obj)
+		if len(result) < 1 {
+			continue
+		}
+		jsonPath.Set(obj, redacted)
+	}
+	return obj, true
 }
 
 // Map of helper methods
@@ -223,6 +241,7 @@ var helpers = map[string]interface{}{
 	"rlimit":     rlimit,
 	"leftOff":    leftOff,
 	"json":       _json,
+	"redact":     redact,
 }
 
 // Iterates and evaulates each parameter of a given function call
@@ -232,7 +251,7 @@ func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err
 		if param.JsonPath != nil {
 			v = param.JsonPath
 		} else {
-			v, err = evalExpression(param.Expression, obj)
+			v, _, err = evalExpression(param.Expression, obj)
 		}
 		vs = append(vs, v)
 	}
@@ -240,9 +259,9 @@ func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err
 }
 
 // Recurses to evalExpression
-func evalSelectExpression(sel *SelectExpression, obj interface{}) (v interface{}, err error) {
+func evalSelectExpression(sel *SelectExpression, obj interface{}) (v interface{}, newObj interface{}, err error) {
 	if sel.Expression != nil {
-		v, err = evalExpression(sel.Expression, obj)
+		v, newObj, err = evalExpression(sel.Expression, obj)
 	} else {
 		v = false
 	}
@@ -250,9 +269,9 @@ func evalSelectExpression(sel *SelectExpression, obj interface{}) (v interface{}
 }
 
 // Gateway method for evalSelectExpression
-func evalCallExpression(call *CallExpression, obj interface{}) (v interface{}, err error) {
+func evalCallExpression(call *CallExpression, obj interface{}) (v interface{}, newObj interface{}, err error) {
 	if call.SelectExpression != nil {
-		v, err = evalSelectExpression(call.SelectExpression, obj)
+		v, newObj, err = evalSelectExpression(call.SelectExpression, obj)
 	} else {
 		v = false
 	}
@@ -260,7 +279,9 @@ func evalCallExpression(call *CallExpression, obj interface{}) (v interface{}, e
 }
 
 // Evaluates boolean, integer, float, string literals and call, sub-, select expressions.
-func evalPrimary(pri *Primary, obj interface{}) (v interface{}, collapse bool, err error) {
+func evalPrimary(pri *Primary, obj interface{}) (v interface{}, newObj interface{}, collapse bool, err error) {
+	newObj = obj
+
 	if pri.Bool != nil {
 		// `true`, `false` goes here
 		v = *pri.Bool
@@ -292,9 +313,9 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, collapse bool, e
 		if pri.Helper != nil && pri.CallExpression != nil {
 			var params []interface{}
 			params, err = evalParameters(pri.CallExpression.Parameters, obj)
-			params = append([]interface{}{v}, params...)
+			params = append([]interface{}{obj, v}, params...)
 			if helper, ok := helpers[*pri.Helper]; ok {
-				v = helper.(func(args ...interface{}) interface{})(params...)
+				newObj, v = helper.(func(args ...interface{}) (interface{}, interface{}))(params...)
 			} else {
 				// Collapse if an undefined helper is invoked
 				collapse = true
@@ -306,10 +327,10 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, collapse bool, e
 		v = pri.Regexp
 	} else if pri.SubExpression != nil {
 		// `(5 == a)` goes here
-		v, err = evalExpression(pri.SubExpression, obj)
+		v, newObj, err = evalExpression(pri.SubExpression, obj)
 	} else if pri.CallExpression != nil {
 		// `request.headers["a"]` or `request.path[0]` or `brand["name"].startsWith("Chev")` goes here
-		v, err = evalCallExpression(pri.CallExpression, obj)
+		v, newObj, err = evalCallExpression(pri.CallExpression, obj)
 	} else {
 		if pri.Nil {
 			// `nil` goes here
@@ -323,9 +344,11 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, collapse bool, e
 }
 
 // Evaluates unary expressions like `!`, `-`
-func evalUnary(unar *Unary, obj interface{}) (v interface{}, collapse bool, err error) {
+func evalUnary(unar *Unary, obj interface{}) (v interface{}, newObj interface{}, collapse bool, err error) {
+	newObj = obj
+
 	if unar.Unary != nil {
-		v, collapse, err = evalUnary(unar.Unary, obj)
+		v, newObj, collapse, err = evalUnary(unar.Unary, obj)
 		if err != nil || collapse {
 			return
 		}
@@ -340,23 +363,25 @@ func evalUnary(unar *Unary, obj interface{}) (v interface{}, collapse bool, err 
 			}
 		}
 	} else {
-		v, collapse, err = evalPrimary(unar.Primary, obj)
+		v, newObj, collapse, err = evalPrimary(unar.Primary, obj)
 	}
 
 	return
 }
 
 // Evaluates comparison expressions like `>=`, `>`, `<=`, `<`
-func evalComparison(comp *Comparison, obj interface{}) (v interface{}, collapse bool, err error) {
+func evalComparison(comp *Comparison, obj interface{}) (v interface{}, newObj interface{}, collapse bool, err error) {
+	newObj = obj
+
 	var logic interface{}
-	logic, collapse, err = evalUnary(comp.Unary, obj)
+	logic, newObj, collapse, err = evalUnary(comp.Unary, obj)
 	if err != nil || collapse {
 		return
 	}
 
 	var next interface{}
 	if comp.Next != nil {
-		next, collapse, err = evalComparison(comp.Next, obj)
+		next, newObj, collapse, err = evalComparison(comp.Next, obj)
 		if err != nil || collapse {
 			return
 		}
@@ -370,16 +395,18 @@ func evalComparison(comp *Comparison, obj interface{}) (v interface{}, collapse 
 }
 
 // Evaluates equality expressions like `!=`, `==`
-func evalEquality(equ *Equality, obj interface{}) (v interface{}, collapse bool, err error) {
+func evalEquality(equ *Equality, obj interface{}) (v interface{}, newObj interface{}, collapse bool, err error) {
+	newObj = obj
+
 	var comp interface{}
-	comp, collapse, err = evalComparison(equ.Comparison, obj)
+	comp, newObj, collapse, err = evalComparison(equ.Comparison, obj)
 	if err != nil || collapse {
 		return
 	}
 
 	var next interface{}
 	if equ.Next != nil {
-		next, collapse, err = evalEquality(equ.Next, obj)
+		next, newObj, collapse, err = evalEquality(equ.Next, obj)
 		if err != nil || collapse {
 			return
 		}
@@ -393,9 +420,11 @@ func evalEquality(equ *Equality, obj interface{}) (v interface{}, collapse bool,
 }
 
 // Evaluates logical expressions like `and`, `or`
-func evalLogical(logic *Logical, obj interface{}) (v interface{}, collapse bool, err error) {
+func evalLogical(logic *Logical, obj interface{}) (v interface{}, newObj interface{}, collapse bool, err error) {
+	newObj = obj
+
 	var unar interface{}
-	unar, collapse, err = evalEquality(logic.Equality, obj)
+	unar, newObj, collapse, err = evalEquality(logic.Equality, obj)
 	if err != nil || collapse {
 		return
 	}
@@ -412,7 +441,7 @@ func evalLogical(logic *Logical, obj interface{}) (v interface{}, collapse bool,
 
 	var next interface{}
 	if logic.Next != nil {
-		next, collapse, err = evalLogical(logic.Next, obj)
+		next, newObj, collapse, err = evalLogical(logic.Next, obj)
 		if err != nil || collapse {
 			return
 		}
@@ -426,13 +455,15 @@ func evalLogical(logic *Logical, obj interface{}) (v interface{}, collapse bool,
 }
 
 // Evaluates the root of AST
-func evalExpression(expr *Expression, obj interface{}) (v interface{}, err error) {
+func evalExpression(expr *Expression, obj interface{}) (v interface{}, newObj interface{}, err error) {
+	newObj = obj
+
 	if expr.Logical == nil {
 		v = true
 		return
 	}
 	var collapse bool
-	v, collapse, err = evalLogical(expr.Logical, obj)
+	v, newObj, collapse, err = evalLogical(expr.Logical, obj)
 	if collapse {
 		v = false
 	}
@@ -447,13 +478,14 @@ func evalExpression(expr *Expression, obj interface{}) (v interface{}, err error
 // on an arbitrary JSON structure.
 //
 // Calling Precompute() on Expression before calling Eval() improves performance.
-func Eval(expr *Expression, json string) (truth bool, err error) {
+func Eval(expr *Expression, json string) (truth bool, newJson string, err error) {
 	obj, err := oj.ParseString(json)
 	if err != nil {
 		return
 	}
 
-	v, err := evalExpression(expr, obj)
+	v, newObj, err := evalExpression(expr, obj)
 	truth = boolOperand(v)
+	newJson = oj.JSON(newObj)
 	return
 }

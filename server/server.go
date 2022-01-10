@@ -494,6 +494,9 @@ func handleConnection(conn net.Conn) {
 	// Set connection mode to NONE
 	var mode ConnectionMode = NONE
 
+	// Arguments for the SINGLE command (index, query)
+	var singleArgs []string
+
 	// Arguments for the FETCH command (leftOff, direction, query, limit)
 	var fetchArgs []string
 
@@ -531,7 +534,12 @@ func handleConnection(conn net.Conn) {
 		case QUERY:
 			streamRecords(conn, data)
 		case SINGLE:
-			retrieveSingle(conn, data)
+			if len(singleArgs) < 2 {
+				singleArgs = append(singleArgs, string(data))
+			}
+			if len(singleArgs) == 2 {
+				retrieveSingle(conn, singleArgs)
+			}
 		case FETCH:
 			if len(fetchArgs) < 4 {
 				fetchArgs = append(fetchArgs, string(data))
@@ -889,7 +897,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 
 			// Evaluate the current record against the given query.
-			truth, err := Eval(expr, string(b))
+			truth, record, err := Eval(expr, string(b))
 			check(err)
 
 			// Write the record into TCP connection if it passes the query.
@@ -898,7 +906,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 					rlimitOffsetQueue = append(rlimitOffsetQueue, offset)
 					rlimitPartitionRefQueue = append(rlimitPartitionRefQueue, partitionRef)
 				} else {
-					_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+					_, err := conn.Write([]byte(fmt.Sprintf("%s\n", record)))
 					if err != nil {
 						log.Printf("Write error: %v\n", err)
 						break
@@ -959,13 +967,14 @@ func getOffsetAndPartition(index int) (offset int64, f *os.File, err error) {
 }
 
 // retrieveSingle fetches a single record from the database.
-func retrieveSingle(conn net.Conn, data []byte) (err error) {
+func retrieveSingle(conn net.Conn, args []string) (err error) {
 	// Convert index value provided as string to integer
-	index, err := strconv.Atoi(string(data))
+	index, err := strconv.Atoi(args[0])
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the index to integer: %s\n", err.Error())))
 		return
 	}
+	query := args[1]
 
 	// Safely access the length of offsets slice.
 	cs.RLock()
@@ -997,7 +1006,13 @@ func retrieveSingle(conn net.Conn, data []byte) (err error) {
 	var b []byte
 	b, _, err = readRecord(f, n)
 	f.Close()
-	conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+
+	// Callling `Eval` for record altering helpers like `redact`
+	expr, _, err := prepareQuery(conn, query)
+	_, record, err := Eval(expr, string(b))
+	check(err)
+
+	conn.Write([]byte(fmt.Sprintf("%s\n", record)))
 	return
 }
 
@@ -1159,7 +1174,7 @@ func fetch(conn net.Conn, args []string) {
 		}
 
 		// Evaluate the current record against the given query.
-		truth, err := Eval(expr, string(b))
+		truth, record, err := Eval(expr, string(b))
 		check(err)
 
 		metadata, _ = json.Marshal(Metadata{
@@ -1178,7 +1193,7 @@ func fetch(conn net.Conn, args []string) {
 
 		// Write the record into TCP connection if it passes the query.
 		if truth {
-			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
+			_, err := conn.Write([]byte(fmt.Sprintf("%s\n", record)))
 			if err != nil {
 				log.Printf("Write error: %v\n", err)
 				break
