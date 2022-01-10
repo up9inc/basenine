@@ -5,6 +5,6 @@ COPY server server
 COPY Makefile .
 RUN make build GOOS=linux GOARCH=amd64
 
-FROM alpine:3.13.5
+FROM alpine:3.15
 COPY --from=builder ["/tmp/build/basenine_linux_amd64", "./basenine"]
 ENTRYPOINT "./basenine"
