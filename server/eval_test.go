@@ -114,6 +114,7 @@ var data = []struct {
 	{`response.body.json()[0] == "v1"`, `{"response":{"body":"[\"api\",\"v1\",\"example\"]"}}`, false, 0, 0, 0},
 	{`response.body.json()["model"] == "Camaro"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, true, 0, 0, 0},
 	{`response.body.json()["model"] == "CamaroX"`, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, false, 0, 0, 0},
+	{`response.body.json().brand.name == "Chevrolet"`, `{"response":{"body":"eyJpZCI6MTE0OTA1LCJtb2RlbCI6IkNhbWFybyIsImJyYW5kIjp7Im5hbWUiOiJDaGV2cm9sZXQifSwieWVhciI6MjAyMX0="}}`, true, 0, 0, 0},
 }
 
 func TestEval(t *testing.T) {
