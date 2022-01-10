@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"regexp"
 	"strconv"
 	"strings"
@@ -194,7 +195,15 @@ func leftOff(args ...interface{}) (interface{}, interface{}) {
 }
 
 func _json(args ...interface{}) (interface{}, interface{}) {
-	obj, err := oj.ParseString(stringOperand(args[1]))
+	jsonString := string(stringOperand(args[1]))
+
+	// Try to base64 decode the JSON string
+	base64Decoded, err := base64.StdEncoding.DecodeString(jsonString)
+	if err == nil {
+		jsonString = string(base64Decoded)
+	}
+
+	obj, err := oj.ParseString(jsonString)
 	if err != nil {
 		return args[0], false
 	}
