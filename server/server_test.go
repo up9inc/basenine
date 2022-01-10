@@ -105,7 +105,7 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	go handleConnection(server)
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/insert\n"))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_INSERT)))
 	client.Write([]byte(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`))
 	client.Write([]byte("\n"))
 
@@ -205,7 +205,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 		wg.Add(1)
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-		client.Write([]byte("/query\n"))
+		client.Write([]byte(fmt.Sprintf("%s\n", CMD_QUERY)))
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
@@ -267,7 +267,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 	wg.Add(1)
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/single\n"))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_SINGLE)))
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%d\n", id)))
@@ -333,7 +333,7 @@ func TestServerProtocolValidateMode(t *testing.T) {
 		wg.Add(1)
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-		client.Write([]byte("/validate\n"))
+		client.Write([]byte(fmt.Sprintf("%s\n", CMD_VALIDATE)))
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
@@ -366,7 +366,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	assert.NotNil(t, f)
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/macro\n"))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_MACRO)))
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", macro)))
@@ -414,7 +414,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	wg.Add(1)
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/query\n"))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_QUERY)))
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", query)))
@@ -509,7 +509,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 		wg.Add(1)
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-		client.Write([]byte("/fetch\n"))
+		client.Write([]byte(fmt.Sprintf("%s\n", CMD_FETCH)))
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%d\n", row.leftOff)))
@@ -546,7 +546,7 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	go handleConnection(server)
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/limit\n"))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_LIMIT)))
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%d\n", limit)))
@@ -558,7 +558,7 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	go handleConnection(server)
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	client.Write([]byte("/insert\n"))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_INSERT)))
 
 	for index := 0; index < 15000; index++ {
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
