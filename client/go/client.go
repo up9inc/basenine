@@ -93,7 +93,7 @@ func (c *Connection) Query(query string, data chan []byte, meta chan []byte) {
 
 // Single returns a single record from the database server specified by the host:port pair
 // and by given ID.
-func Single(host string, port string, id int) (data []byte, err error) {
+func Single(host string, port string, id int, query string) (data []byte, err error) {
 	var c *Connection
 	c, err = NewConnection(host, port)
 	if err != nil {
@@ -108,6 +108,7 @@ func Single(host string, port string, id int) (data []byte, err error) {
 
 	c.SendText(CMD_SINGLE)
 	c.SendText(fmt.Sprintf("%d", id))
+	c.SendText(query)
 
 	data = <-ret
 	c.Close()

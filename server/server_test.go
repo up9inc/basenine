@@ -272,6 +272,9 @@ func TestServerProtocolSingleMode(t *testing.T) {
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%d\n", id)))
 
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("\n"))
+
 	if waitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	} else {

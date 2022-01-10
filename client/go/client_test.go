@@ -55,7 +55,7 @@ func TestInsert(t *testing.T) {
 
 func TestSingle(t *testing.T) {
 	id := 42
-	data, err := Single(HOST, PORT, id)
+	data, err := Single(HOST, PORT, id, "")
 	assert.Nil(t, err)
 
 	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
