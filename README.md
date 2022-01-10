@@ -99,8 +99,11 @@ c.Close()
 Single:
 
 ```go
-// Retrieve the record with ID equals to 42
-data, err := Single("localhost", "9099", 42)
+// Retrieve the record with ID equals to 42 with an empty query
+// The 4th argument query, is only effective in case of
+// record altering helpers like `redact` are used.
+// Please refer the BFL syntax reference for more info.
+data, err := Single("localhost", "9099", 42, "")
 if err != nil {
     panic(err)
 }
