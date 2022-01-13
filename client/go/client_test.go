@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	HOST string = "localhost"
-	PORT string = "9099"
+	HOST     string = "localhost"
+	PORT     string = "9099"
+	REDACTED string = "[REDACTED]"
 )
 
 // waitTimeout waits for the waitgroup for the specified max timeout.
@@ -41,6 +42,11 @@ func TestMacro(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestInsertionFilter(t *testing.T) {
+	err := InsertionFilter(HOST, PORT, `brand.name == "Chevrolet" and redact("year")`)
+	assert.Nil(t, err)
+}
+
 func TestInsert(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
@@ -58,7 +64,7 @@ func TestSingle(t *testing.T) {
 	data, err := Single(HOST, PORT, id, "")
 	assert.Nil(t, err)
 
-	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
+	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":"%s"}`, id, REDACTED)
 	assert.JSONEq(t, expected, string(data))
 }
 
@@ -100,7 +106,7 @@ func TestQuery(t *testing.T) {
 			text := string(ret)
 
 			index++
-			assert.JSONEq(t, `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`, text)
+			assert.JSONEq(t, fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":"%s"}`, REDACTED), text)
 
 			if index > 14000 {
 				c.Close()
@@ -146,7 +152,7 @@ func TestFetch(t *testing.T) {
 
 	i := 0
 	for id := 99; id > 80; id-- {
-		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
+		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":"%s"}`, id, REDACTED)
 		assert.JSONEq(t, expected, string(data[i]))
 		i++
 	}

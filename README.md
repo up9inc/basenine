@@ -40,8 +40,11 @@ Run the server:
 
 The database server has six modes:
 
-- **Insert mode** provies a long lasting TCP connection to insert data into the `data_*.bin` binary files on server's directory.
+- **Insert mode** is a long lasting TCP connection to insert data into the `data_*.bin` binary files on server's directory.
 A client can elevate itself to insert mode by sending `/insert` command.
+
+- **Insertion filter mode** is a short lasting TCP connection that let's you set an insertion filter which is executed
+right before the insertion of each individual record. The default value of insertion filter is an empty string.
 
 - **Query mode** let's you filter the records in the database based on a [filtering syntax named BFL](https://github.com/up9inc/basenine/wiki/BFL-Syntax-Reference).
 Query mode streams the results to the client and is able to keep up where it left off even if the database have millions of records.
@@ -181,6 +184,16 @@ Macro:
 ```go
 // Define a macro `chevy` expands into `brand.name == "Chevrolet"`
 err := Macro("localhost", "9099", "chevy", `brand.name == "Chevrolet"`)
+if err != nil {
+    // err can only be a connection error
+}
+```
+
+Insertion Filter:
+
+```go
+// Set the insertion filter to `brand.name == "Chevrolet" and redact("year")`
+err := InsertionFilter("localhost", "9099", `brand.name == "Chevrolet" and redact("year")`)
 if err != nil {
     // err can only be a connection error
 }

@@ -29,14 +29,15 @@ type Metadata struct {
 
 // Commands refers to TCP connection modes.
 const (
-	CMD_INSERT   string = "/insert"
-	CMD_QUERY    string = "/query"
-	CMD_SINGLE   string = "/single"
-	CMD_FETCH    string = "/fetch"
-	CMD_VALIDATE string = "/validate"
-	CMD_MACRO    string = "/macro"
-	CMD_LIMIT    string = "/limit"
-	CMD_METADATA string = "/metadata"
+	CMD_INSERT           string = "/insert"
+	CMD_INSERTION_FILTER string = "/insert-filter"
+	CMD_QUERY            string = "/query"
+	CMD_SINGLE           string = "/single"
+	CMD_FETCH            string = "/fetch"
+	CMD_VALIDATE         string = "/validate"
+	CMD_MACRO            string = "/macro"
+	CMD_LIMIT            string = "/limit"
+	CMD_METADATA         string = "/metadata"
 )
 
 // Closing indicators
@@ -81,7 +82,7 @@ func (c *Connection) InsertMode() {
 // a []byte channel which the records will be streamed into as the second parameter.
 // Third parameter is the channel for streaming metadata, progress of the query.
 func (c *Connection) Query(query string, data chan []byte, meta chan []byte) {
-	query = strings.Replace(query, "\n", " ", -1)
+	query = escapeLineFeed(query)
 
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, data, meta)
@@ -159,7 +160,7 @@ func Fetch(host string, port string, leftOff int, direction int, query string, l
 // Validate validates the given query against syntax errors by passing the query
 // to the database server at host:port
 func Validate(host string, port string, query string) (err error) {
-	query = strings.Replace(query, "\n", " ", -1)
+	query = escapeLineFeed(query)
 
 	var c *Connection
 	c, err = NewConnection(host, port)
@@ -202,6 +203,35 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 
 	c.SendText(CMD_MACRO)
 	c.SendText(fmt.Sprintf("%s~%s", macro, expanded))
+
+	data := <-ret
+	text := string(data)
+	if text != "OK" {
+		err = errors.New(text)
+	}
+	c.Close()
+	return
+}
+
+// InsertionFilter set an insertion filter given in the query argument in the database server
+// at host:port.
+func InsertionFilter(host string, port string, query string) (err error) {
+	query = escapeLineFeed(query)
+
+	var c *Connection
+	c, err = NewConnection(host, port)
+	if err != nil {
+		return
+	}
+
+	ret := make(chan []byte)
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, c, ret, nil)
+	wg.Add(1)
+
+	c.SendText(CMD_INSERTION_FILTER)
+	c.SendText(fmt.Sprintf("%s", query))
 
 	data := <-ret
 	text := string(data)
@@ -296,4 +326,8 @@ func handleCommands(bytes []byte, meta chan []byte) string {
 	}
 
 	return ""
+}
+
+func escapeLineFeed(query string) string {
+	return strings.Replace(query, "\n", " ", -1)
 }

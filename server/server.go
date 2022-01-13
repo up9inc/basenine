@@ -54,6 +54,8 @@ type ConnectionMode int
 //
 // INSERT is a long lasting TCP connection mode for inserting data into database.
 //
+// INSERTION_FILTER is a short lasting TCP connection mode for setting the insertion filter.
+//
 // QUERY is a long lasting TCP connection mode for retrieving data from the database
 // based on a given filtering query.
 //
@@ -72,6 +74,7 @@ type ConnectionMode int
 const (
 	NONE ConnectionMode = iota
 	INSERT
+	INSERTION_FILTER
 	QUERY
 	SINGLE
 	FETCH
@@ -84,14 +87,15 @@ type Commands int
 
 // Commands refers to TCP connection modes.
 const (
-	CMD_INSERT   string = "/insert"
-	CMD_QUERY    string = "/query"
-	CMD_SINGLE   string = "/single"
-	CMD_FETCH    string = "/fetch"
-	CMD_VALIDATE string = "/validate"
-	CMD_MACRO    string = "/macro"
-	CMD_LIMIT    string = "/limit"
-	CMD_METADATA string = "/metadata"
+	CMD_INSERT           string = "/insert"
+	CMD_INSERTION_FILTER string = "/insert-filter"
+	CMD_QUERY            string = "/query"
+	CMD_SINGLE           string = "/single"
+	CMD_FETCH            string = "/fetch"
+	CMD_VALIDATE         string = "/validate"
+	CMD_MACRO            string = "/macro"
+	CMD_LIMIT            string = "/limit"
+	CMD_METADATA         string = "/metadata"
 )
 
 // Constants defines the database filename's prefix and file extension.
@@ -130,6 +134,8 @@ type ConcurrentSlice struct {
 	truncatedTimestamp    int64
 	removedOffsetsCounter int
 	macros                map[string]string
+	insertionFilter       string
+	insertionFilterExpr   *Expression
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
@@ -143,6 +149,7 @@ type ConcurrentSliceExport struct {
 	TruncatedTimestamp    int64
 	RemovedOffsetsCounter int
 	Macros                map[string]string
+	InsertionFilter       string
 }
 
 // Core dump filename
@@ -290,6 +297,7 @@ func dumpCore(silent bool, dontLock bool) {
 	csExport.TruncatedTimestamp = cs.truncatedTimestamp
 	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
 	csExport.Macros = cs.macros
+	csExport.InsertionFilter = cs.insertionFilter
 	if !dontLock {
 		cs.Unlock()
 	}
@@ -342,6 +350,8 @@ func restoreCore() {
 	cs.truncatedTimestamp = csExport.TruncatedTimestamp
 	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
 	cs.macros = csExport.Macros
+	cs.insertionFilter = csExport.InsertionFilter
+	cs.insertionFilterExpr, _, _ = prepareQuery(cs.insertionFilter)
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 }
@@ -531,6 +541,8 @@ func handleConnection(conn net.Conn) {
 			}
 		case INSERT:
 			insertData(data)
+		case INSERTION_FILTER:
+			setInsertionFilter(conn, data)
 		case QUERY:
 			streamRecords(conn, data)
 		case SINGLE:
@@ -583,6 +595,9 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 			mode = INSERT
 			return
 
+		case strings.HasPrefix(message, CMD_INSERTION_FILTER):
+			mode = INSERTION_FILTER
+
 		case strings.HasPrefix(message, CMD_QUERY):
 			mode = QUERY
 
@@ -625,6 +640,20 @@ func check(e error) {
 // Then marshals that map back and safely writes the bytes into
 // the current database partitition.
 func insertData(data []byte) {
+	// Handle the insertion filter if it's not empty
+	cs.RLock()
+	insertionFilter := cs.insertionFilter
+	insertionFilterExpr := cs.insertionFilterExpr
+	cs.RUnlock()
+	if len(insertionFilter) > 0 {
+		truth, record, err := Eval(insertionFilterExpr, string(data))
+		check(err)
+		if !truth {
+			return
+		}
+		data = []byte(record)
+	}
+
 	var d map[string]interface{}
 	if err := json.Unmarshal(data, &d); err != nil {
 		return
@@ -668,6 +697,23 @@ func insertData(data []byte) {
 	if *debug {
 		// Log the amount of bytes that are written into the database.
 		log.Printf("Wrote %d bytes to the partition: %s\n", n, f.Name())
+	}
+}
+
+// setInsertionFilter tries to set the given query as an insertion filter
+func setInsertionFilter(conn net.Conn, data []byte) {
+	query := string(data)
+
+	insertionFilterExpr, _, err := prepareQuery(query)
+
+	if err == nil {
+		cs.Lock()
+		cs.insertionFilter = query
+		cs.insertionFilterExpr = insertionFilterExpr
+		cs.Unlock()
+		conn.Write([]byte(fmt.Sprintf("OK\n")))
+	} else {
+		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
 	}
 }
 
@@ -751,7 +797,7 @@ func watchPartitions() (err error) {
 }
 
 // prepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
-func prepareQuery(conn net.Conn, query string) (expr *Expression, prop Propagate, err error) {
+func prepareQuery(query string) (expr *Expression, prop Propagate, err error) {
 	// Expand all macros in the query, if there are any.
 	query, err = expandMacros(query)
 	check(err)
@@ -760,7 +806,7 @@ func prepareQuery(conn net.Conn, query string) (expr *Expression, prop Propagate
 	expr, err = Parse(query)
 	if err != nil {
 		log.Printf("Syntax error: %v\n", err)
-		conn.Close()
+		return
 	}
 
 	// leftOff is the state to track the last offset's index in cs.offsets
@@ -794,7 +840,10 @@ func handleNegativeLeftOff(leftOff int64) int64 {
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
 func streamRecords(conn net.Conn, data []byte) (err error) {
-	expr, prop, err := prepareQuery(conn, string(data))
+	expr, prop, err := prepareQuery(string(data))
+	if err != nil {
+		conn.Close()
+	}
 	limit := prop.limit
 	rlimit := prop.rlimit
 	leftOff := prop.leftOff
@@ -1008,7 +1057,10 @@ func retrieveSingle(conn net.Conn, args []string) (err error) {
 	f.Close()
 
 	// Callling `Eval` for record altering helpers like `redact`
-	expr, _, err := prepareQuery(conn, query)
+	expr, _, err := prepareQuery(query)
+	if err != nil {
+		conn.Close()
+	}
 	_, record, err := Eval(expr, string(b))
 	check(err)
 
@@ -1059,7 +1111,10 @@ func fetch(conn net.Conn, args []string) {
 	}
 
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
-	expr, _, err := prepareQuery(conn, query)
+	expr, _, err := prepareQuery(query)
+	if err != nil {
+		conn.Close()
+	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0

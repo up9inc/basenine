@@ -15,7 +15,7 @@ import (
 	oj "github.com/ohler55/ojg/oj"
 )
 
-const redacted = "[REDACTED]"
+const REDACTED = "[REDACTED]"
 
 // bool operand evaluator. Boolean literals falls into this method.
 func boolOperand(operand interface{}) bool {
@@ -226,7 +226,7 @@ func redact(args ...interface{}) (interface{}, interface{}) {
 		if len(result) < 1 {
 			continue
 		}
-		jsonPath.Set(obj, redacted)
+		jsonPath.Set(obj, REDACTED)
 	}
 	return obj, true
 }
