@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
-      max-parallel: 6
+      max-parallel: 2
       fail-fast: false
       matrix:
         target:
@@ -55,10 +55,19 @@ jobs:
           build-args: ${{ matrix.target }}
 
   github-registry:
+    name: Push Docker image to GitHub's Registry
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        target:
+          - amd64
+          - arm64v8
 
     steps:
       - name: Checkout repository
@@ -87,6 +96,7 @@ jobs:
           build-args: ${{ matrix.target }}
 
   docker-manifest:
+    name: Create and Push a Docker Manifest
     runs-on: ubuntu-latest
     needs: [docker-registry]
     steps:
