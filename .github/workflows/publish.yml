@@ -22,7 +22,7 @@ jobs:
       matrix:
         target:
           - amd64
-          - arm64v8
+          - arm64
 
     steps:
       - name: Check out the repo
@@ -68,7 +68,7 @@ jobs:
       matrix:
         target:
           - amd64
-          - arm64v8
+          - arm64
 
     steps:
       - name: Checkout repository
@@ -118,7 +118,7 @@ jobs:
       - name: Create manifest
         run: |
           while IFS= read -r line; do
-            docker manifest create $line --amend $line-amd64 --amend $line-arm64v8
+            docker manifest create $line --amend $line-amd64 --amend $line-arm64
           done <<< "${{ steps.meta.outputs.tags }}"
 
       - name: Push manifest
