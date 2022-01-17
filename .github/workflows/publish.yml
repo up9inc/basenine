@@ -43,7 +43,7 @@ jobs:
           flavor: |
             latest=auto
             prefix=
-            suffix=-${{ matrix.target }},onlatest=true
+            suffix=-${{ matrix.target[0] }},onlatest=true
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
@@ -86,7 +86,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: ${{ env.GITHUB_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.target }}
+          images: ${{ env.GITHUB_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.target[0] }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
@@ -120,7 +120,7 @@ jobs:
       - name: Create manifest
         run: |
           while IFS= read -r line; do
-            docker manifest create $line --amend $line-amd64 --amend $line-arm64
+            docker manifest create $line --amend $line-amd64 --amend $line-arm64v8
           done <<< "${{ steps.meta.outputs.tags }}"
 
       - name: Push manifest
