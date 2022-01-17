@@ -109,10 +109,20 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
 
       - name: Create manifest
-        run: docker manifest create \
-              ${{ steps.meta.outputs.tags }} \
-              --amend ${{ steps.meta.outputs.tags }}-amd64 \
-              --amend ${{ steps.meta.outputs.tags }}-arm64v8
+        run: |
+          docker manifest create \
+              ${{ steps.meta.outputs.tags }} $(
+                while IFS= read -r line; do
+                  echo -n "--amend $line-amd64 "
+                done <<< "${{ steps.meta.outputs.tags }}"
+              ) $(
+                while IFS= read -r line; do
+                  echo -n "--amend $line-arm64v8 "
+                done <<< "${{ steps.meta.outputs.tags }}"
+              )
 
       - name: Push manifest
-        run: docker manifest push ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r line; do
+            docker manifest push $line
+          done <<< "${{ steps.meta.outputs.tags }}"
