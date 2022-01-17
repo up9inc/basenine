@@ -46,7 +46,7 @@ var version = flag.Bool("version", false, "Print version and exit.")
 var persistent = flag.Bool("persistent", false, "Enable persistent mode. Dumps core on exit.")
 
 // Version of the software.
-const VERSION string = "0.4.6"
+const VERSION string = "0.4.7"
 
 type ConnectionMode int
 
