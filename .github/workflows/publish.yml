@@ -52,7 +52,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.target }}
+          build-args: |
+            ARCH=${{ matrix.target }}
 
   github-registry:
     name: Push Docker image to GitHub's Registry
@@ -93,7 +94,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.target }}
+          build-args: |
+            ARCH=${{ matrix.target }}
 
   docker-manifest:
     name: Create and Push a Docker Manifest
