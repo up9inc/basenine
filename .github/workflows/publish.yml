@@ -21,8 +21,8 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - amd64
-          - arm64
+          - [amd64, amd64]
+          - [arm64v8, arm64]
 
     steps:
       - name: Check out the repo
@@ -53,7 +53,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            ARCH=${{ matrix.target }}
+            ARCH=${{ matrix.target[0] }}
+            GOARCH=${{ matrix.target[1] }}
 
   github-registry:
     name: Push Docker image to GitHub's Registry
@@ -95,7 +96,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            ARCH=${{ matrix.target }}
+            ARCH=${{ matrix.target[0] }}
+            GOARCH=${{ matrix.target[1] }}
 
   docker-manifest:
     name: Create and Push a Docker Manifest
