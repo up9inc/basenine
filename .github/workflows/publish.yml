@@ -68,8 +68,8 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - amd64
-          - arm64
+          - [amd64, amd64]
+          - [arm64v8, arm64]
 
     steps:
       - name: Checkout repository
