@@ -110,16 +110,9 @@ jobs:
 
       - name: Create manifest
         run: |
-          docker manifest create \
-              ${{ steps.meta.outputs.tags }} $(
-                while IFS= read -r line; do
-                  echo -n "--amend $line-amd64 "
-                done <<< "${{ steps.meta.outputs.tags }}"
-              ) $(
-                while IFS= read -r line; do
-                  echo -n "--amend $line-arm64v8 "
-                done <<< "${{ steps.meta.outputs.tags }}"
-              )
+          while IFS= read -r line; do
+            docker manifest create $line --amend $line-amd64 --amend $line-arm64v8
+          done <<< "${{ steps.meta.outputs.tags }}"
 
       - name: Push manifest
         run: |
