@@ -10,7 +10,7 @@ COPY server server
 COPY Makefile .
 RUN make build GOOS=linux GOARCH=${GOARCH}
 
-FROM ${ARCH}/alpine:3.15
+FROM ${ARCH}/busybox:latest
 ARG ARCH
 ARG GOARCH
 COPY --from=builder ["/tmp/build/basenine_linux_${GOARCH}", "./basenine"]
