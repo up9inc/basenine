@@ -624,6 +624,13 @@ func TestServerProtocolLimitMode(t *testing.T) {
 		partitionIndex: -1,
 	}
 
+	f := newPartition()
+	assert.NotNil(t, f)
+
+	// Trigger partitioning check for every second.
+	ticker := time.NewTicker(1 * time.Second)
+	go periodicPartitioner(ticker)
+
 	server, client := net.Pipe()
 	go handleConnection(server)
 

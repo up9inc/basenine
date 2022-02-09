@@ -179,10 +179,6 @@ func init() {
 		macros:         make(map[string]string),
 	}
 
-	// Trigger partitioning check for every second.
-	ticker := time.NewTicker(1 * time.Second)
-	go periodicPartitioner(ticker)
-
 	// Initiate the global watcher
 	var err error
 	watcher, err = fsnotify.NewWatcher()
@@ -199,7 +195,12 @@ func main() {
 	} else {
 		// Clean up the database files.
 		removeDatabaseFiles()
+		newPartition()
 	}
+
+	// Trigger partitioning check for every second.
+	ticker := time.NewTicker(1 * time.Second)
+	go periodicPartitioner(ticker)
 
 	// Print version and exit.
 	if *version {
