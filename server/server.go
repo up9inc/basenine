@@ -179,14 +179,6 @@ func init() {
 		macros:         make(map[string]string),
 	}
 
-	// If persistent mode is enabled, try to restore the core.
-	if *persistent {
-		restoreCore()
-	} else {
-		// Clean up the database files.
-		removeDatabaseFiles()
-	}
-
 	// Trigger partitioning check for every second.
 	ticker := time.NewTicker(1 * time.Second)
 	go periodicPartitioner(ticker)
@@ -200,6 +192,14 @@ func init() {
 func main() {
 	// Parse the command-line arguments.
 	flag.Parse()
+
+	// If persistent mode is enabled, try to restore the core.
+	if *persistent {
+		restoreCore()
+	} else {
+		// Clean up the database files.
+		removeDatabaseFiles()
+	}
 
 	// Print version and exit.
 	if *version {
