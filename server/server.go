@@ -337,6 +337,7 @@ func restoreCore() {
 	cs.offsets = csExport.Offsets
 	for _, partitionPath := range csExport.PartitionPaths {
 		if partitionPath == "" {
+			cs.partitions = append(cs.partitions, nil)
 			continue
 		}
 		paritition, err := os.OpenFile(partitionPath, os.O_CREATE|os.O_WRONLY, 0644)
