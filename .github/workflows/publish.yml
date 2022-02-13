@@ -128,3 +128,22 @@ jobs:
           while IFS= read -r line; do
             docker manifest push $line
           done <<< "${{ steps.meta.outputs.tags }}"
+
+  binaries:
+    name: Build and Publish The Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+
+      - name: Build
+        run: make build-all
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/*
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
