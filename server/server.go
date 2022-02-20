@@ -494,7 +494,9 @@ func handleConnection(conn net.Conn) {
 
 	// Log the connection
 	remoteAddr := conn.RemoteAddr().String()
-	log.Println("Client connected from " + remoteAddr)
+	if *debug {
+		log.Println("Client connected from " + remoteAddr)
+	}
 
 	// Create a scanner
 	scanner := bufio.NewScanner(conn)
@@ -573,7 +575,9 @@ func handleConnection(conn net.Conn) {
 	// Close the file descriptor for this TCP connection
 	conn.Close()
 	// Log the disconnect
-	log.Println("Client at " + remoteAddr + " disconnected.")
+	if *debug {
+		log.Println("Client at " + remoteAddr + " disconnected.")
+	}
 }
 
 // quitConnections quits all of the active TCP connections. It's only called

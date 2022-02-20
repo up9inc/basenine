@@ -46,6 +46,9 @@ const (
 	CloseConnection = "%quit%"
 )
 
+// Software name
+const SoftwareName = "Basenine"
+
 // Connection is the struct that holds the TCP connection reference.
 type Connection struct {
 	net.Conn
@@ -284,7 +287,7 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte, meta ch
 			ok := scanner.Scan()
 
 			if !ok {
-				log.Println("Reached EOF on server connection.")
+				// Reached EOF on server connection.
 				return
 			}
 
@@ -299,7 +302,7 @@ func readConnection(wg *sync.WaitGroup, c *Connection, data chan []byte, meta ch
 				meta <- b
 				continue
 			case CloseConnection:
-				log.Println("Server is leaving. Hanging up.")
+				log.Printf("%s client: Server is leaving. Hanging up.\n", SoftwareName)
 				break
 			}
 
