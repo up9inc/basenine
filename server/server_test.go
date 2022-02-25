@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	basenine "github.com/up9inc/basenine/server/lib"
 )
 
 // waitTimeout waits for the waitgroup for the specified max timeout.
@@ -187,7 +188,7 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 					break
 				}
 
-				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":"%s"}`, index, REDACTED)
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":"%s"}`, index, basenine.REDACTED)
 				index++
 				assert.JSONEq(t, expected, string(bytes))
 
