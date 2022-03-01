@@ -2,7 +2,7 @@
 // Use of this source code is governed by Apache License 2.0
 // license that can be found in the LICENSE file.
 
-package main
+package basenine
 
 import (
 	"fmt"
@@ -11,18 +11,17 @@ import (
 	"github.com/dlclark/regexp2"
 )
 
-// addMacro takes macro and its corresponding expanded version
+// addMacro takes macros map, macro and its corresponding expanded version
 // as arguments. It stores the macro in a global map.
-func addMacro(macro string, expanded string) {
-	cs.Lock()
-	cs.macros[macro] = fmt.Sprintf("(%s)", expanded)
-	cs.Unlock()
+func AddMacro(macros map[string]string, macro string, expanded string) map[string]string {
+	macros[macro] = fmt.Sprintf("(%s)", expanded)
+	return macros
 }
 
 // expandMacro expands the macros in a given query, if there are any.
 // It uses a lookahead regular expression to ignore the occurences
 // of the macro inside the string literals.
-func expandMacros(query string) (string, error) {
+func ExpandMacros(macros map[string]string, query string) (string, error) {
 	var err error
 
 	type pair struct {
@@ -31,9 +30,6 @@ func expandMacros(query string) (string, error) {
 	}
 
 	var slice []pair
-	cs.RLock()
-	macros := cs.macros
-	cs.RUnlock()
 	for k, v := range macros {
 		slice = append(slice, pair{k, v})
 	}

@@ -18,6 +18,7 @@ test: clean basenine test-server test-client-go coverage
 
 test-server:
 	cd server/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
+	cd server/lib && go test *.go -v -covermode=atomic -coverprofile=coverage.out
 
 test-client-go:
 	test/client_go.sh
@@ -35,7 +36,7 @@ build-all:
 	$(MAKE) build GOOS=darwin GOARCH=arm64
 
 coverage:
-	cp server/coverage.out coverage.out && sed 1,1d client/go/coverage.out >> coverage.out
+	cp server/coverage.out coverage.out && sed 1,1d server/lib/coverage.out >> coverage.out && sed 1,1d client/go/coverage.out >> coverage.out
 
 install-init-systemd:
 	cp scripts/init/systemd/basenine.service /etc/systemd/system/ && \

@@ -2,7 +2,7 @@
 // Use of this source code is governed by Apache License 2.0
 // license that can be found in the LICENSE file.
 
-package main
+package basenine
 
 import (
 	"fmt"
@@ -19,10 +19,10 @@ var compileTimeEvaluatedHelpers = []string{
 }
 
 type Propagate struct {
-	path    string
-	limit   uint64
-	rlimit  uint64
-	leftOff int64
+	Path    string
+	Limit   uint64
+	Rlimit  uint64
+	LeftOff int64
 }
 
 // strContains checks if a string is present in a slice
@@ -38,17 +38,17 @@ func strContains(s []string, str string) bool {
 
 // Backpropagates the values returned from the binary expressions
 func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
-	if xProp.path == "" {
-		xProp.path = yProp.path
+	if xProp.Path == "" {
+		xProp.Path = yProp.Path
 	}
-	if xProp.limit == 0 {
-		xProp.limit = yProp.limit
+	if xProp.Limit == 0 {
+		xProp.Limit = yProp.Limit
 	}
-	if xProp.rlimit == 0 {
-		xProp.rlimit = yProp.rlimit
+	if xProp.Rlimit == 0 {
+		xProp.Rlimit = yProp.Rlimit
 	}
-	if xProp.leftOff == 0 {
-		xProp.leftOff = yProp.leftOff
+	if xProp.LeftOff == 0 {
+		xProp.LeftOff = yProp.LeftOff
 	}
 
 	return xProp
@@ -62,10 +62,10 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 		// Not a function call
 		if call.Identifier != nil {
 			// Queries like `request.path == "x"`` goes here
-			prop.path = *call.Identifier
+			prop.Path = *call.Identifier
 		}
 		if call.SelectExpression != nil {
-			segments := strings.Split(prop.path, ".")
+			segments := strings.Split(prop.Path, ".")
 			potentialHelper := &segments[len(segments)-1]
 			// Determine whether the .json() helper is used or not
 			jsonHelperUsed := false
@@ -83,7 +83,7 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 					}
 					jsonHelper = false
 				} else {
-					prop.path = fmt.Sprintf("%s[%d]", prop.path, *call.SelectExpression.Index)
+					prop.Path = fmt.Sprintf("%s[%d]", prop.Path, *call.SelectExpression.Index)
 				}
 			} else if call.SelectExpression.Key != nil {
 				// Queries like `request.headers["x"] == "z"`` goes here
@@ -94,43 +94,43 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 					}
 					jsonHelper = false
 				} else {
-					prop.path = fmt.Sprintf("%s[\"%s\"]", prop.path, strings.Trim(*call.SelectExpression.Key, "\""))
+					prop.Path = fmt.Sprintf("%s[\"%s\"]", prop.Path, strings.Trim(*call.SelectExpression.Key, "\""))
 				}
 			}
 
 			// Queries like `request.headers["x"].y == "z"`` or `request.body.json().some.path` goes here
 			if call.SelectExpression.Expression != nil {
 				var _prop Propagate
-				_prop, err = computeExpression(call.SelectExpression.Expression, prop.path, jsonHelperUsed)
-				prop.limit = _prop.limit
-				prop.rlimit = _prop.rlimit
-				prop.leftOff = _prop.leftOff
+				_prop, err = computeExpression(call.SelectExpression.Expression, prop.Path, jsonHelperUsed)
+				prop.Limit = _prop.Limit
+				prop.Rlimit = _prop.Rlimit
+				prop.LeftOff = _prop.LeftOff
 				return
 			}
 		}
 	} else {
 		// It's a function call
-		prop.path = *call.Identifier
+		prop.Path = *call.Identifier
 	}
 
 	// Build JSONPath
 	if jsonHelper {
 		// If .json() helper is used
-		jsonPathParam, err := jp.ParseString(prop.path)
+		jsonPathParam, err := jp.ParseString(prop.Path)
 		if err == nil {
 			call.Parameters = []*Parameter{{JsonPath: &jsonPathParam}}
 		}
 		jsonHelper = false
-		prop.path = prependPath
+		prop.Path = prependPath
 	} else {
 		// else concatenate the paths
-		prop.path = fmt.Sprintf("%s.%s", prependPath, prop.path)
+		prop.Path = fmt.Sprintf("%s.%s", prependPath, prop.Path)
 	}
-	_jsonPath, err := jp.ParseString(prop.path)
+	_jsonPath, err := jp.ParseString(prop.Path)
 
 	// If it's a function call, determine the name of helper method.
 	if call.Parameters != nil {
-		segments := strings.Split(prop.path, ".")
+		segments := strings.Split(prop.Path, ".")
 		helper = &segments[len(segments)-1]
 		_jsonPath = _jsonPath[:len(_jsonPath)-1]
 
@@ -141,11 +141,11 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 				if err == nil {
 					switch *helper {
 					case "rlimit":
-						prop.rlimit = uint64(float64Operand(v))
+						prop.Rlimit = uint64(float64Operand(v))
 					case "limit":
-						prop.limit = uint64(float64Operand(v))
+						prop.Limit = uint64(float64Operand(v))
 					case "leftOff":
-						prop.leftOff = int64(float64Operand(v))
+						prop.LeftOff = int64(float64Operand(v))
 					}
 				}
 			}

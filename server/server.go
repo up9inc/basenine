@@ -37,6 +37,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	jp "github.com/ohler55/ojg/jp"
 	oj "github.com/ohler55/ojg/oj"
+	basenine "github.com/up9inc/basenine/server/lib"
 )
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
@@ -135,7 +136,7 @@ type ConcurrentSlice struct {
 	removedOffsetsCounter int
 	macros                map[string]string
 	insertionFilter       string
-	insertionFilterExpr   *Expression
+	insertionFilterExpr   *basenine.Expression
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
@@ -652,7 +653,7 @@ func insertData(data []byte) {
 	insertionFilterExpr := cs.insertionFilterExpr
 	cs.RUnlock()
 	if len(insertionFilter) > 0 {
-		truth, record, err := Eval(insertionFilterExpr, string(data))
+		truth, record, err := basenine.Eval(insertionFilterExpr, string(data))
 		check(err)
 		if !truth {
 			return
@@ -803,13 +804,16 @@ func watchPartitions() (err error) {
 }
 
 // prepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
-func prepareQuery(query string) (expr *Expression, prop Propagate, err error) {
+func prepareQuery(query string) (expr *basenine.Expression, prop basenine.Propagate, err error) {
 	// Expand all macros in the query, if there are any.
-	query, err = expandMacros(query)
+	cs.RLock()
+	macros := cs.macros
+	cs.RUnlock()
+	query, err = basenine.ExpandMacros(macros, query)
 	check(err)
 
 	// Parse the query.
-	expr, err = Parse(query)
+	expr, err = basenine.Parse(query)
 	if err != nil {
 		log.Printf("Syntax error: %v\n", err)
 		return
@@ -818,7 +822,7 @@ func prepareQuery(query string) (expr *Expression, prop Propagate, err error) {
 	// leftOff is the state to track the last offset's index in cs.offsets
 	// default value of leftOff is 0. leftOff(..) helper overrides it.
 	// can be -1 also, means that it's last record.
-	prop, err = Precompute(expr)
+	prop, err = basenine.Precompute(expr)
 	check(err)
 
 	return
@@ -850,9 +854,9 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	if err != nil {
 		conn.Close()
 	}
-	limit := prop.limit
-	rlimit := prop.rlimit
-	leftOff := prop.leftOff
+	limit := prop.Limit
+	rlimit := prop.Rlimit
+	leftOff := prop.LeftOff
 
 	leftOff = handleNegativeLeftOff(leftOff)
 
@@ -952,7 +956,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			}
 
 			// Evaluate the current record against the given query.
-			truth, record, err := Eval(expr, string(b))
+			truth, record, err := basenine.Eval(expr, string(b))
 			check(err)
 
 			// Write the record into TCP connection if it passes the query.
@@ -1067,7 +1071,7 @@ func retrieveSingle(conn net.Conn, args []string) (err error) {
 	if err != nil {
 		conn.Close()
 	}
-	_, record, err := Eval(expr, string(b))
+	_, record, err := basenine.Eval(expr, string(b))
 	check(err)
 
 	conn.Write([]byte(fmt.Sprintf("%s\n", record)))
@@ -1235,7 +1239,7 @@ func fetch(conn net.Conn, args []string) {
 		}
 
 		// Evaluate the current record against the given query.
-		truth, record, err := Eval(expr, string(b))
+		truth, record, err := basenine.Eval(expr, string(b))
 		check(err)
 
 		metadata, _ = json.Marshal(Metadata{
@@ -1269,9 +1273,12 @@ func fetch(conn net.Conn, args []string) {
 func validateQuery(conn net.Conn, data []byte) {
 	query := string(data)
 	// Expand all macros in the query, if there are any.
-	query, err := expandMacros(query)
+	cs.RLock()
+	macros := cs.macros
+	cs.RUnlock()
+	query, err := basenine.ExpandMacros(macros, query)
 	check(err)
-	_, err = Parse(query)
+	_, err = basenine.Parse(query)
 
 	if err == nil {
 		conn.Write([]byte(fmt.Sprintf("OK\n")))
@@ -1294,7 +1301,9 @@ func applyMacro(conn net.Conn, data []byte) {
 	macro := strings.TrimSpace(s[0])
 	expanded := strings.TrimSpace(s[1])
 
-	addMacro(macro, expanded)
+	cs.Lock()
+	cs.macros = basenine.AddMacro(cs.macros, macro, expanded)
+	cs.Unlock()
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
