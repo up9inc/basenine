@@ -134,9 +134,9 @@ func TestEval(t *testing.T) {
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		assert.Equal(t, row.limit, prop.limit)
-		assert.Equal(t, row.rlimit, prop.rlimit)
-		assert.Equal(t, row.leftOff, prop.leftOff)
+		assert.Equal(t, row.limit, prop.Limit)
+		assert.Equal(t, row.rlimit, prop.Rlimit)
+		assert.Equal(t, row.leftOff, prop.LeftOff)
 		// repr.Println(expr)
 		truth, newJson, err := Eval(expr, row.json)
 		if err != nil {

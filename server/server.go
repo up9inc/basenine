@@ -806,7 +806,10 @@ func watchPartitions() (err error) {
 // prepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
 func prepareQuery(query string) (expr *basenine.Expression, prop basenine.Propagate, err error) {
 	// Expand all macros in the query, if there are any.
-	query, err = expandMacros(query)
+	cs.RLock()
+	macros := cs.macros
+	cs.RUnlock()
+	query, err = basenine.ExpandMacros(macros, query)
 	check(err)
 
 	// Parse the query.
@@ -1270,7 +1273,10 @@ func fetch(conn net.Conn, args []string) {
 func validateQuery(conn net.Conn, data []byte) {
 	query := string(data)
 	// Expand all macros in the query, if there are any.
-	query, err := expandMacros(query)
+	cs.RLock()
+	macros := cs.macros
+	cs.RUnlock()
+	query, err := basenine.ExpandMacros(macros, query)
 	check(err)
 	_, err = basenine.Parse(query)
 
@@ -1295,7 +1301,10 @@ func applyMacro(conn net.Conn, data []byte) {
 	macro := strings.TrimSpace(s[0])
 	expanded := strings.TrimSpace(s[1])
 
-	addMacro(macro, expanded)
+	cs.RLock()
+	macros := cs.macros
+	cs.RUnlock()
+	basenine.AddMacro(macros, macro, expanded)
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
