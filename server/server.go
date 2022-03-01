@@ -1301,10 +1301,9 @@ func applyMacro(conn net.Conn, data []byte) {
 	macro := strings.TrimSpace(s[0])
 	expanded := strings.TrimSpace(s[1])
 
-	cs.RLock()
-	macros := cs.macros
-	cs.RUnlock()
-	basenine.AddMacro(macros, macro, expanded)
+	cs.Lock()
+	cs.macros = basenine.AddMacro(cs.macros, macro, expanded)
+	cs.Unlock()
 
 	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
