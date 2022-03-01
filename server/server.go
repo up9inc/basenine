@@ -101,7 +101,7 @@ const (
 
 // Constants defines the database filename's prefix and file extension.
 const DB_FILE string = "data"
-const DB_FILE_EXT string = "bin"
+const DB_FILE_EXT string = "db"
 
 // Slice that stores the TCP connections
 var connections []net.Conn
