@@ -138,13 +138,13 @@ func TestQuery(t *testing.T) {
 
 	c.Query(`chevy`, data, meta)
 
-	if waitTimeout(&wg, 10*time.Second) {
+	if waitTimeout(&wg, 20*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	}
 }
 
 func TestFetch(t *testing.T) {
-	data, meta, err := Fetch(HOST, PORT, 100, -1, `chevy`, 20, 10*time.Second)
+	data, meta, err := Fetch(HOST, PORT, 100, -1, `chevy`, 20, 20*time.Second)
 	assert.Nil(t, err)
 
 	assert.Equal(t, `{"current":20,"total":15000,"numberOfWritten":19,"leftOff":80,"truncatedTimestamp":0}`, string(meta))
