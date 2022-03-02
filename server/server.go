@@ -27,6 +27,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -101,6 +102,7 @@ const (
 
 // Constants defines the database filename's prefix and file extension.
 const DB_FILE string = "data"
+const LEGACY_DB_FILE_EXT string = "bin"
 const DB_FILE_EXT string = "db"
 
 // Slice that stores the TCP connections
@@ -190,6 +192,9 @@ func main() {
 	// Parse the command-line arguments.
 	flag.Parse()
 
+	// Rename the legacy database files
+	renameLegacyDatabaseFiles()
+
 	// If persistent mode is enabled, try to restore the core.
 	if *persistent {
 		restoreCore()
@@ -241,7 +246,7 @@ func main() {
 	}
 }
 
-// newParitition crates a new database paritition. The filename format is data_000000000.bin
+// newParitition crates a new database paritition. The filename format is data_000000000.db
 // Such that the filename increments according to the partition index.
 func newPartition() *os.File {
 	cs.Lock()
@@ -361,10 +366,21 @@ func restoreCore() {
 
 // removeDatabaseFiles cleans up all of the database files.
 func removeDatabaseFiles() {
-	files, err := filepath.Glob("./data_*.bin")
+	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", DB_FILE_EXT))
 	check(err)
 	for _, f := range files {
 		os.Remove(f)
+	}
+}
+
+// renameLegacyDatabaseFiles cleans up all of the database files.
+func renameLegacyDatabaseFiles() {
+	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", LEGACY_DB_FILE_EXT))
+	check(err)
+	for _, infile := range files {
+		ext := path.Ext(infile)
+		outfile := infile[0:len(infile)-len(ext)] + "." + DB_FILE_EXT
+		os.Rename(infile, outfile)
 	}
 }
 
