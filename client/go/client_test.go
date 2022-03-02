@@ -96,7 +96,7 @@ func TestQuery(t *testing.T) {
 			bytes := <-data
 
 			var d map[string]interface{}
-			err = json.Unmarshal(bytes, &d)
+			err := json.Unmarshal(bytes, &d)
 			assert.Nil(t, err)
 
 			delete(d, "id")
@@ -121,7 +121,7 @@ func TestQuery(t *testing.T) {
 			bytes := <-meta
 
 			var metadata *Metadata
-			err = json.Unmarshal(bytes, &metadata)
+			err := json.Unmarshal(bytes, &metadata)
 			assert.Nil(t, err)
 
 			index++
@@ -137,9 +137,8 @@ func TestQuery(t *testing.T) {
 	wg.Add(1)
 
 	c.Query(`chevy`, data, meta)
-	assert.Nil(t, err)
 
-	if waitTimeout(&wg, 2*time.Second) {
+	if waitTimeout(&wg, 5*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	}
 }

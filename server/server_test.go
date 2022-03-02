@@ -144,6 +144,7 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 	insertionFilter := `brand.name == "Chevrolet" and redact("year")`
 	query := `brand.name == "Chevrolet"`
 
+	cs.Lock()
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 		macros:         make(map[string]string),
