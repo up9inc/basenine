@@ -25,4 +25,4 @@ build/
 basenine
 
 # Core dump
-basenine.gob
+*.gob
