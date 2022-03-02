@@ -196,9 +196,15 @@ func main() {
 	renameLegacyDatabaseFiles()
 
 	// If persistent mode is enabled, try to restore the core.
+	var isRestored bool
 	if *persistent {
-		restoreCore()
-	} else {
+		err := restoreCore()
+		if err == nil {
+			isRestored = true
+		}
+	}
+
+	if !isRestored {
 		// Clean up the database files.
 		removeDatabaseFiles()
 		newPartition()
@@ -322,8 +328,9 @@ func dumpCore(silent bool, dontLock bool) {
 
 // Restores the core from a file named "basenine.gob"
 // if it's present in current working directory
-func restoreCore() {
-	f, err := os.Open(coreDumpFilename)
+func restoreCore() (err error) {
+	var f *os.File
+	f, err = os.Open(coreDumpFilename)
 	if err != nil {
 		log.Printf("Warning while restoring the core: %v\n", err)
 		return
@@ -362,6 +369,7 @@ func restoreCore() {
 	cs.insertionFilterExpr, _, _ = prepareQuery(cs.insertionFilter)
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
+	return
 }
 
 // removeDatabaseFiles cleans up all of the database files.
