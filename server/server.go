@@ -109,6 +109,7 @@ const DB_FILE_EXT string = "db"
 var connections []net.Conn
 
 var cs ConcurrentSlice
+var cdl CoreDumpLock
 
 // ConcurrentSlice is a mutually excluded struct that contains a list of fields that
 // needs to be safely accessed data across multiple goroutines.
@@ -157,6 +158,7 @@ type ConcurrentSliceExport struct {
 
 // Core dump filename
 const coreDumpFilename string = "basenine.gob"
+const coreDumpFilenameTemp string = "basenine_tmp.gob"
 
 // Global file watcher
 var watcher *fsnotify.Watcher
@@ -175,12 +177,20 @@ const (
 	CloseConnection = "%quit%"
 )
 
+// Serves as a core dump lock
+type CoreDumpLock struct {
+	sync.Mutex
+}
+
 func init() {
 	// Initialize the ConcurrentSlice.
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 		macros:         make(map[string]string),
 	}
+
+	// Initialize the core dump lock.
+	cdl = CoreDumpLock{}
 
 	// Initiate the global watcher
 	var err error
@@ -285,7 +295,8 @@ func handleExit() {
 
 // Dumps the core into a file named "basenine.gob"
 func dumpCore(silent bool, dontLock bool) {
-	f, err := os.Create(coreDumpFilename)
+	cdl.Lock()
+	f, err := os.Create(coreDumpFilenameTemp)
 	check(err)
 	defer f.Close()
 	encoder := gob.NewEncoder(f)
@@ -321,9 +332,12 @@ func dumpCore(silent bool, dontLock bool) {
 		return
 	}
 
+	os.Rename(coreDumpFilenameTemp, coreDumpFilename)
+
 	if !silent {
 		log.Printf("Dumped the core to: %s\n", coreDumpFilename)
 	}
+	cdl.Unlock()
 }
 
 // Restores the core from a file named "basenine.gob"
