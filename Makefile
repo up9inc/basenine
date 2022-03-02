@@ -17,8 +17,8 @@ clean:
 test: clean basenine test-server test-client-go coverage
 
 test-server:
-	cd server/ && go test *.go -v -covermode=atomic -coverprofile=coverage.out
-	cd server/lib && go test *.go -v -covermode=atomic -coverprofile=coverage.out
+	cd server/ && go test *.go -v -race -covermode=atomic -coverprofile=coverage.out
+	cd server/lib && go test *.go -v -race -covermode=atomic -coverprofile=coverage.out
 
 test-client-go:
 	test/client_go.sh

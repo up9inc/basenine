@@ -143,16 +143,26 @@ func Fetch(host string, port string, leftOff int, direction int, query string, l
 
 	afterCh := time.After(timeout)
 	counter := 0
+	var receivedMeta bool
+	var receivedData bool
 	for {
 		select {
 		case record := <-dataChan:
 			data = append(data, record)
 			counter++
 			if counter >= limit {
+				receivedData = true
+				if receivedMeta {
+					c.Close()
+					return
+				}
+			}
+		case meta = <-metaChan:
+			receivedMeta = true
+			if receivedData {
 				c.Close()
 				return
 			}
-		case meta = <-metaChan:
 		case <-afterCh:
 			c.Close()
 			return
