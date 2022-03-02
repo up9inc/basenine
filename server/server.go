@@ -332,7 +332,11 @@ func restoreCore() {
 	decoder := gob.NewDecoder(f)
 
 	var csExport ConcurrentSliceExport
-	decoder.Decode(&csExport)
+	err = decoder.Decode(&csExport)
+	if err != nil {
+		log.Printf("Error while restoring the core: %v\n", err.Error())
+		return
+	}
 
 	cs.lastOffset = csExport.LastOffset
 	cs.partitionRefs = csExport.PartitionRefs
