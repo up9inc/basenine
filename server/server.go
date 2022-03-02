@@ -333,7 +333,7 @@ func restoreCore() {
 
 	var csExport ConcurrentSliceExport
 	err = decoder.Decode(&csExport)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		log.Printf("Error while restoring the core: %v\n", err.Error())
 		return
 	}
