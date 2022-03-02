@@ -297,10 +297,13 @@ func handleExit(sig syscall.Signal) {
 }
 
 // Dumps the core into a file named "basenine.gob"
-func dumpCore(silent bool, dontLock bool) {
+func dumpCore(silent bool, dontLock bool) (err error) {
 	cdl.Lock()
-	f, err := os.Create(coreDumpFilenameTemp)
-	check(err)
+	var f *os.File
+	f, err = os.Create(coreDumpFilenameTemp)
+	if err != nil {
+		return
+	}
 	defer f.Close()
 	encoder := gob.NewEncoder(f)
 
@@ -341,6 +344,7 @@ func dumpCore(silent bool, dontLock bool) {
 		log.Printf("Dumped the core to: %s\n", coreDumpFilename)
 	}
 	cdl.Unlock()
+	return
 }
 
 // Restores the core from a file named "basenine.gob"
@@ -370,12 +374,17 @@ func restoreCore() (err error) {
 			cs.partitions = append(cs.partitions, nil)
 			continue
 		}
-		paritition, err := os.OpenFile(partitionPath, os.O_CREATE|os.O_WRONLY, 0644)
-		check(err)
+		var paritition *os.File
+		paritition, err = os.OpenFile(partitionPath, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return
+		}
 		cs.partitions = append(cs.partitions, paritition)
 
 		err = watcher.Add(paritition.Name())
-		check(err)
+		if err != nil {
+			return
+		}
 	}
 	cs.partitionIndex = csExport.PartitionIndex
 	cs.partitionSizeLimit = csExport.PartitionSizeLimit
