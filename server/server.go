@@ -227,6 +227,7 @@ func main() {
 	// Print version and exit.
 	if *version {
 		fmt.Printf("%s\n", VERSION)
+		// 0: process exited normally
 		os.Exit(0)
 	}
 
@@ -244,10 +245,10 @@ func main() {
 
 	// Handle the channel.
 	go func() {
-		<-c
+		sig := <-c
 		quitConnections()
 		watcher.Close()
-		handleExit()
+		handleExit(sig.(syscall.Signal))
 	}()
 
 	// Start accepting TCP connections.
@@ -280,17 +281,19 @@ func newPartition() *os.File {
 }
 
 // handleExit gracefully exists the server accordingly. Dumps core if "-persistent" enabled.
-func handleExit() {
+func handleExit(sig syscall.Signal) {
+	// 128: killed by a signal and dumped core
+	// + the signal value.
+	exitCode := int(128 + sig)
+
 	if !*persistent {
 		removeDatabaseFiles()
-		// 7: killed by a signal and dumped core
-		os.Exit(7)
+		os.Exit(exitCode)
 	}
 
 	dumpCore(false, false)
 
-	// 0: process exited normally
-	os.Exit(1)
+	os.Exit(exitCode)
 }
 
 // Dumps the core into a file named "basenine.gob"
