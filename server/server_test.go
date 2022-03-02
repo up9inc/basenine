@@ -42,6 +42,14 @@ func TestServerNewPartition(t *testing.T) {
 	f := newPartition()
 	assert.NotNil(t, f)
 	assert.FileExists(t, fmt.Sprintf("%s_%09d.%s", DB_FILE, cs.partitionIndex, DB_FILE_EXT))
+}
+
+func TestServerDumpRestoreCore(t *testing.T) {
+	err := dumpCore(false, false)
+	assert.Nil(t, err)
+
+	err = restoreCore()
+	assert.Nil(t, err)
 
 	removeDatabaseFiles()
 }
