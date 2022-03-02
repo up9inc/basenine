@@ -35,6 +35,7 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 }
 
 func TestServerNewPartition(t *testing.T) {
+	cs.Lock()
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 	}
@@ -67,6 +68,7 @@ func TestServerCheckError(t *testing.T) {
 func TestServerInsertAndReadData(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
+	cs.Lock()
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 	}
@@ -106,6 +108,7 @@ func TestServerConnCheck(t *testing.T) {
 }
 
 func TestServerProtocolInsertMode(t *testing.T) {
+	cs.Lock()
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 	}
@@ -248,6 +251,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 	for _, row := range testServerProtocolQueryModeData {
 		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
+		cs.Lock()
 		cs = ConcurrentSlice{
 			partitionIndex: -1,
 		}
@@ -317,6 +321,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	id := 42
 
+	cs.Lock()
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 	}
@@ -388,6 +393,7 @@ var validateModeData = []struct {
 
 func TestServerProtocolValidateMode(t *testing.T) {
 	for _, row := range validateModeData {
+		cs.Lock()
 		cs = ConcurrentSlice{
 			partitionIndex: -1,
 		}
@@ -446,6 +452,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	macro := `chevy~brand.name == "Chevrolet"`
 	query := `chevy`
 
+	cs.Lock()
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 		macros:         make(map[string]string),
@@ -542,6 +549,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 	for _, row := range testServerProtocolFetchModeData {
 		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
+		cs.Lock()
 		cs = ConcurrentSlice{
 			partitionIndex: -1,
 		}
@@ -630,6 +638,7 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	limit := int64(1000000) // 1MB
 
+	cs.Lock()
 	cs = ConcurrentSlice{
 		partitionIndex: -1,
 	}
