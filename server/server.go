@@ -129,31 +129,31 @@ var cdl CoreDumpLock
 // partitionSizeLimit is the value of database partition size limit. 0 means unlimited size.
 type ConcurrentSlice struct {
 	sync.RWMutex
-	lastOffset            int64
-	partitionRefs         []int64
-	offsets               []int64
-	partitions            []*os.File
-	partitionIndex        int64
-	partitionSizeLimit    int64
-	truncatedTimestamp    int64
-	removedOffsetsCounter int
-	macros                map[string]string
-	insertionFilter       string
-	insertionFilterExpr   *basenine.Expression
+	lastOffset         int64
+	partitionRefs      []int64
+	offsets            []int64
+	partitions         []*os.File
+	partitionIndex     int64
+	partitionSizeLimit int64
+	truncatedTimestamp int64
+	// removedOffsetsCounter int
+	macros              map[string]string
+	insertionFilter     string
+	insertionFilterExpr *basenine.Expression
 }
 
 // Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
 type ConcurrentSliceExport struct {
-	LastOffset            int64
-	PartitionRefs         []int64
-	Offsets               []int64
-	PartitionPaths        []string
-	PartitionIndex        int64
-	PartitionSizeLimit    int64
-	TruncatedTimestamp    int64
-	RemovedOffsetsCounter int
-	Macros                map[string]string
-	InsertionFilter       string
+	LastOffset         int64
+	PartitionRefs      []int64
+	Offsets            []int64
+	PartitionPaths     []string
+	PartitionIndex     int64
+	PartitionSizeLimit int64
+	TruncatedTimestamp int64
+	// RemovedOffsetsCounter int
+	Macros          map[string]string
+	InsertionFilter string
 }
 
 // Core dump filename
@@ -325,7 +325,7 @@ func dumpCore(silent bool, dontLock bool) (err error) {
 	csExport.PartitionIndex = cs.partitionIndex
 	csExport.PartitionSizeLimit = cs.partitionSizeLimit
 	csExport.TruncatedTimestamp = cs.truncatedTimestamp
-	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
+	// csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
 	csExport.Macros = cs.macros
 	csExport.InsertionFilter = cs.insertionFilter
 	if !dontLock {
@@ -389,7 +389,7 @@ func restoreCore() (err error) {
 	cs.partitionIndex = csExport.PartitionIndex
 	cs.partitionSizeLimit = csExport.PartitionSizeLimit
 	cs.truncatedTimestamp = csExport.TruncatedTimestamp
-	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
+	// cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
 	cs.macros = csExport.Macros
 	cs.insertionFilter = csExport.InsertionFilter
 	cs.insertionFilterExpr, _, _ = prepareQuery(cs.insertionFilter)
@@ -424,23 +424,23 @@ func getLastTimestampOfPartition(discardedPartitionIndex int64) (timestamp int64
 	partitionRefs := cs.partitionRefs
 	cs.RUnlock()
 
-	var prevIndex int
 	var removedOffsetsCounter int
 	for i := range offsets {
 		if partitionRefs[i] > discardedPartitionIndex {
 			break
 		}
-		prevIndex = i
 		removedOffsetsCounter++
 	}
 
 	cs.Lock()
-	cs.removedOffsetsCounter = removedOffsetsCounter
+	cs.offsets = cs.offsets[removedOffsetsCounter:]
+	cs.partitionRefs = cs.partitionRefs[removedOffsetsCounter:]
+	// cs.removedOffsetsCounter += removedOffsetsCounter
 	cs.Unlock()
 
 	var n int64
 	var f *os.File
-	n, f, err = getOffsetAndPartition(prevIndex)
+	n, f, err = getOffsetAndPartition(0)
 
 	if err != nil {
 		return
@@ -924,9 +924,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	// Number of queried records
 	var queried uint64 = 0
 
-	// removedCounter keeps track of how many offsets belong to a removed partition.
-	var removedOffsetsCounter int
-
 	for {
 		// f is the current partition we're reading the data from.
 		var f *os.File
@@ -946,7 +943,6 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		subPartitionRefs := cs.partitionRefs[leftOff:]
 		totalNumberOfRecords := len(cs.offsets)
 		truncatedTimestamp := cs.truncatedTimestamp
-		removedOffsetsCounter = cs.removedOffsetsCounter
 		cs.RUnlock()
 
 		// Disable rlimit if it's bigger than the total records.
@@ -1024,13 +1020,10 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				}
 			}
 
-			// Correct the metadata values by subtracting removedOffsetsCounter
-			realTotal := totalNumberOfRecords - removedOffsetsCounter
-
 			metadata = &Metadata{
 				NumberOfWritten:    numberOfWritten,
 				Current:            uint64(queried),
-				Total:              uint64(realTotal),
+				Total:              uint64(totalNumberOfRecords),
 				LeftOff:            uint64(leftOff),
 				TruncatedTimestamp: truncatedTimestamp,
 			}
@@ -1196,7 +1189,6 @@ func fetch(conn net.Conn, args []string) {
 	var subPartitionRefs []int64
 	var totalNumberOfRecords int
 	var truncatedTimestamp int64
-	var removedOffsetsCounter int
 	cs.RLock()
 	totalNumberOfRecords = len(cs.offsets)
 	truncatedTimestamp = cs.truncatedTimestamp
@@ -1207,7 +1199,6 @@ func fetch(conn net.Conn, args []string) {
 		subOffsets = cs.offsets[leftOff:]
 		subPartitionRefs = cs.partitionRefs[leftOff:]
 	}
-	removedOffsetsCounter = cs.removedOffsetsCounter
 	cs.RUnlock()
 
 	var metadata []byte
@@ -1218,7 +1209,7 @@ func fetch(conn net.Conn, args []string) {
 	metadata, _ = json.Marshal(Metadata{
 		NumberOfWritten:    numberOfWritten,
 		Current:            uint64(queried),
-		Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
+		Total:              uint64(totalNumberOfRecords),
 		LeftOff:            uint64(leftOff),
 		TruncatedTimestamp: truncatedTimestamp,
 	})
@@ -1295,7 +1286,7 @@ func fetch(conn net.Conn, args []string) {
 		metadata, _ = json.Marshal(Metadata{
 			NumberOfWritten:    numberOfWritten,
 			Current:            uint64(queried),
-			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
+			Total:              uint64(totalNumberOfRecords),
 			LeftOff:            uint64(leftOff),
 			TruncatedTimestamp: truncatedTimestamp,
 		})
