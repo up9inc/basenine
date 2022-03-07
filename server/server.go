@@ -939,6 +939,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 		// Safely access the next part of offsets and partition references.
 		cs.RLock()
+		// TODO: panic: runtime error: slice bounds out of range [6498:3217] (line below)
 		subOffsets := cs.offsets[leftOff:]
 		subPartitionRefs := cs.partitionRefs[leftOff:]
 		totalNumberOfRecords := len(cs.offsets)
