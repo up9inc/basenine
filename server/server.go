@@ -108,11 +108,13 @@ const DB_FILE_EXT string = "db"
 // Slice that stores the TCP connections
 var connections []net.Conn
 
-var cs ConcurrentSlice
+var cs ConcurrentSliceV0
 var cdl CoreDumpLock
 
-// ConcurrentSlice is a mutually excluded struct that contains a list of fields that
+// ConcurrentSliceV0 is a mutually excluded struct that contains a list of fields that
 // needs to be safely accessed data across multiple goroutines.
+//
+// version is the database server version.
 //
 // lastOffset contains the offset of the latest inserted record into the database.
 //
@@ -127,8 +129,21 @@ var cdl CoreDumpLock
 // Initial value of partitionIndex should be -1. -1 means there are no partitions yet.
 //
 // partitionSizeLimit is the value of database partition size limit. 0 means unlimited size.
-type ConcurrentSlice struct {
+//
+// truncatedTimestamp is the timestamp of database truncation event upon size limiting.
+//
+// removedOffsetsCounter is the counter of how many offsets are removed through size limiting.
+//
+// metaOffsetsLength is the length of offsets by ignoring size limiting for indexing.
+//
+// macros is the map of strings where the key is the macro and value is the expanded form.
+//
+// insertionFilter is the filter that's applied just before the insertion of every individual record.
+//
+// insertionFilterExpr is the parsed version of insertionFilter
+type ConcurrentSliceV0 struct {
 	sync.RWMutex
+	version               string
 	lastOffset            int64
 	partitionRefs         []int64
 	offsets               []int64
@@ -143,8 +158,9 @@ type ConcurrentSlice struct {
 	insertionFilterExpr   *basenine.Expression
 }
 
-// Unmutexed, file descriptor clean version of ConcurrentSlice for achieving core dump.
-type ConcurrentSliceExport struct {
+// Unmutexed, file descriptor clean version of ConcurrentSliceV0 for achieving core dump.
+type ConcurrentSliceV0Export struct {
+	Version               string
 	LastOffset            int64
 	PartitionRefs         []int64
 	Offsets               []int64
@@ -185,8 +201,9 @@ type CoreDumpLock struct {
 }
 
 func init() {
-	// Initialize the ConcurrentSlice.
-	cs = ConcurrentSlice{
+	// Initialize the ConcurrentSliceV0.
+	cs = ConcurrentSliceV0{
+		version:        VERSION,
 		partitionIndex: -1,
 		macros:         make(map[string]string),
 	}
@@ -309,11 +326,12 @@ func dumpCore(silent bool, dontLock bool) (err error) {
 	defer f.Close()
 	encoder := gob.NewEncoder(f)
 
-	// ConcurrentSlice has an embedded mutex. Therefore it cannot be dumped directly.
-	var csExport ConcurrentSliceExport
+	// ConcurrentSliceV0 has an embedded mutex. Therefore it cannot be dumped directly.
+	var csExport ConcurrentSliceV0Export
 	if !dontLock {
 		cs.Lock()
 	}
+	csExport.Version = cs.version
 	csExport.LastOffset = cs.lastOffset
 	csExport.PartitionRefs = cs.partitionRefs
 	csExport.Offsets = cs.offsets
@@ -362,13 +380,14 @@ func restoreCore() (err error) {
 	defer f.Close()
 	decoder := gob.NewDecoder(f)
 
-	var csExport ConcurrentSliceExport
+	var csExport ConcurrentSliceV0Export
 	err = decoder.Decode(&csExport)
 	if err != nil {
 		log.Printf("Error while restoring the core: %v\n", err.Error())
 		return
 	}
 
+	cs.version = VERSION
 	cs.lastOffset = csExport.LastOffset
 	cs.partitionRefs = csExport.PartitionRefs
 	cs.offsets = csExport.Offsets

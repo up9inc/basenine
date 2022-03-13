@@ -36,7 +36,7 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 
 func TestServerNewPartition(t *testing.T) {
 	cs.Lock()
-	cs = ConcurrentSlice{
+	cs = ConcurrentSliceV0{
 		partitionIndex: -1,
 	}
 
@@ -69,7 +69,7 @@ func TestServerInsertAndReadData(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
 	cs.Lock()
-	cs = ConcurrentSlice{
+	cs = ConcurrentSliceV0{
 		partitionIndex: -1,
 	}
 
@@ -109,7 +109,7 @@ func TestServerConnCheck(t *testing.T) {
 
 func TestServerProtocolInsertMode(t *testing.T) {
 	cs.Lock()
-	cs = ConcurrentSlice{
+	cs = ConcurrentSliceV0{
 		partitionIndex: -1,
 	}
 
@@ -156,7 +156,7 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 	query := `brand.name == "Chevrolet"`
 
 	cs.Lock()
-	cs = ConcurrentSlice{
+	cs = ConcurrentSliceV0{
 		partitionIndex: -1,
 		macros:         make(map[string]string),
 	}
@@ -252,7 +252,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
 		cs.Lock()
-		cs = ConcurrentSlice{
+		cs = ConcurrentSliceV0{
 			partitionIndex: -1,
 		}
 
@@ -322,7 +322,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 	id := 42
 
 	cs.Lock()
-	cs = ConcurrentSlice{
+	cs = ConcurrentSliceV0{
 		partitionIndex: -1,
 	}
 
@@ -394,7 +394,7 @@ var validateModeData = []struct {
 func TestServerProtocolValidateMode(t *testing.T) {
 	for _, row := range validateModeData {
 		cs.Lock()
-		cs = ConcurrentSlice{
+		cs = ConcurrentSliceV0{
 			partitionIndex: -1,
 		}
 
@@ -453,7 +453,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	query := `chevy`
 
 	cs.Lock()
-	cs = ConcurrentSlice{
+	cs = ConcurrentSliceV0{
 		partitionIndex: -1,
 		macros:         make(map[string]string),
 	}
@@ -550,7 +550,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
 		cs.Lock()
-		cs = ConcurrentSlice{
+		cs = ConcurrentSliceV0{
 			partitionIndex: -1,
 		}
 
@@ -639,7 +639,7 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	limit := int64(1000000) // 1MB
 
 	cs.Lock()
-	cs = ConcurrentSlice{
+	cs = ConcurrentSliceV0{
 		partitionIndex: -1,
 	}
 
