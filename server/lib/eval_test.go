@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ohler55/ojg/jp"
+	oj "github.com/ohler55/ojg/oj"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -149,4 +151,37 @@ func TestEval(t *testing.T) {
 		}
 		assert.JSONEq(t, row.newJson, newJson)
 	}
+}
+
+func TestEvalRedactRecursive(t *testing.T) {
+	query := `redact("response.body.json().model")`
+	json := `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`
+	expected := fmt.Sprintf(`{"id":114905,"model":"%s","brand":{"name":"Chevrolet"},"year":2021}`, REDACTED)
+
+	expr, err := Parse(query)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	_, err = Precompute(expr)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	truth, newJson, err := Eval(expr, json)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	assert.True(t, truth)
+
+	newObj, err := oj.ParseString(newJson)
+	assert.Nil(t, err)
+
+	jsonPath, err := jp.ParseString("response.body")
+	assert.Nil(t, err)
+
+	nestedJson := jsonPath.Get(newObj)[0].(string)
+
+	assert.JSONEq(t, expected, nestedJson)
 }
