@@ -1,6 +1,7 @@
 package basenine
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 
@@ -153,39 +154,6 @@ func TestEval(t *testing.T) {
 	}
 }
 
-func TestEvalRedactRecursive(t *testing.T) {
-	query := `redact("response.body.json().model")`
-	json := `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`
-	expected := fmt.Sprintf(`{"id":114905,"model":"%s","brand":{"name":"Chevrolet"},"year":2021}`, REDACTED)
-
-	expr, err := Parse(query)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	_, err = Precompute(expr)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	truth, newJson, err := Eval(expr, json)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	assert.True(t, truth)
-
-	newObj, err := oj.ParseString(newJson)
-	assert.Nil(t, err)
-
-	jsonPath, err := jp.ParseString("response.body")
-	assert.Nil(t, err)
-
-	nestedJson := jsonPath.Get(newObj)[0].(string)
-
-	assert.JSONEq(t, expected, nestedJson)
-}
-
 var dataXml = []struct {
 	query string
 	truth bool
@@ -221,26 +189,65 @@ func TestEvalXml(t *testing.T) {
 	}
 }
 
-func TestEvalRedactXml(t *testing.T) {
-	query := `redact("response.body.xml().bookstore.book[1].title")`
-	json := `{"response":{"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<bookstore><book category=\"cooking\"><title lang=\"en\">Everyday Italian</title><author>Giada De Laurentiis</author><year>2005</year><price>30.00</price></book><book category=\"children\"><title lang=\"en\">Harry Potter</title><author>J K. Rowling</author><year>2005</year><price>29.99</price></book><book category=\"web\"><title lang=\"en\">XQuery Kick Start</title><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><year>2003</year><price>49.99</price></book><book category=\"web\"><title lang=\"en\">Learning XML</title><author>Erik T. Ray</author><year>2003</year><price>39.95</price></book></bookstore>\r\n"}}`
-	expected := `{"response":{"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bookstore><book category=\"cooking\"><author>Giada De Laurentiis</author><price>30.00</price><title lang=\"en\">Everyday Italian</title><year>2005</year></book><book category=\"children\"><author>J K. Rowling</author><price>29.99</price><title>[REDACTED]</title><year>2005</year></book><book category=\"web\"><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><price>49.99</price><title lang=\"en\">XQuery Kick Start</title><year>2003</year></book><book category=\"web\"><author>Erik T. Ray</author><price>39.95</price><title lang=\"en\">Learning XML</title><year>2003</year></book></bookstore>"}}`
+var dataRedact = []struct {
+	query      string
+	truth      bool
+	json       string
+	expected   string
+	strCompare bool
+}{
+	{`redact("response.body.json().model")`, true, `{"response":{"body":"{\"id\":114905,\"model\":\"Camaro\",\"brand\":{\"name\":\"Chevrolet\"},\"year\":2021}"}}`, fmt.Sprintf(`{"id":114905,"model":"%s","brand":{"name":"Chevrolet"},"year":2021}`, REDACTED), false},
+	{`redact("response.body.json().model")`, true, `{"response":{"body":"eyJpZCI6MTE0OTA1LCJtb2RlbCI6IkNhbWFybyIsImJyYW5kIjp7Im5hbWUiOiJDaGV2cm9sZXQifSwieWVhciI6MjAyMX0="}}`, `eyJpZCI6MTE0OTA1LCJtb2RlbCI6IltSRURBQ1RFRF0iLCJicmFuZCI6eyJuYW1lIjoiQ2hldnJvbGV0In0sInllYXIiOjIwMjF9`, false},
+	{`redact("response.body.xml().bookstore.book[1].title")`, true, `{"response":{"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<bookstore><book category=\"cooking\"><title lang=\"en\">Everyday Italian</title><author>Giada De Laurentiis</author><year>2005</year><price>30.00</price></book><book category=\"children\"><title lang=\"en\">Harry Potter</title><author>J K. Rowling</author><year>2005</year><price>29.99</price></book><book category=\"web\"><title lang=\"en\">XQuery Kick Start</title><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><year>2003</year><price>49.99</price></book><book category=\"web\"><title lang=\"en\">Learning XML</title><author>Erik T. Ray</author><year>2003</year><price>39.95</price></book></bookstore>\r\n"}}`, `<?xml version="1.0" encoding="UTF-8"?>
+<bookstore><book category="cooking"><author>Giada De Laurentiis</author><price>30.00</price><title lang="en">Everyday Italian</title><year>2005</year></book><book category="children"><author>J K. Rowling</author><price>29.99</price><title>[REDACTED]</title><year>2005</year></book><book category="web"><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><price>49.99</price><title lang="en">XQuery Kick Start</title><year>2003</year></book><book category="web"><author>Erik T. Ray</author><price>39.95</price><title lang="en">Learning XML</title><year>2003</year></book></bookstore>`, true},
+	{`redact("response.body.xml().bookstore.book[1].title")`, true, `{"response":{"body":"PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPGJvb2tzdG9yZT48Ym9vayBjYXRlZ29yeT0iY29va2luZyI+PHRpdGxlIGxhbmc9ImVuIj5FdmVyeWRheSBJdGFsaWFuPC90aXRsZT48YXV0aG9yPkdpYWRhIERlIExhdXJlbnRpaXM8L2F1dGhvcj48eWVhcj4yMDA1PC95ZWFyPjxwcmljZT4zMC4wMDwvcHJpY2U+PC9ib29rPjxib29rIGNhdGVnb3J5PSJjaGlsZHJlbiI+PHRpdGxlIGxhbmc9ImVuIj5IYXJyeSBQb3R0ZXI8L3RpdGxlPjxhdXRob3I+SiBLLiBSb3dsaW5nPC9hdXRob3I+PHllYXI+MjAwNTwveWVhcj48cHJpY2U+MjkuOTk8L3ByaWNlPjwvYm9vaz48Ym9vayBjYXRlZ29yeT0id2ViIj48dGl0bGUgbGFuZz0iZW4iPlhRdWVyeSBLaWNrIFN0YXJ0PC90aXRsZT48YXV0aG9yPkphbWVzIE1jR292ZXJuPC9hdXRob3I+PGF1dGhvcj5QZXIgQm90aG5lcjwvYXV0aG9yPjxhdXRob3I+S3VydCBDYWdsZTwvYXV0aG9yPjxhdXRob3I+SmFtZXMgTGlubjwvYXV0aG9yPjxhdXRob3I+VmFpZHlhbmF0aGFuIE5hZ2FyYWphbjwvYXV0aG9yPjx5ZWFyPjIwMDM8L3llYXI+PHByaWNlPjQ5Ljk5PC9wcmljZT48L2Jvb2s+PGJvb2sgY2F0ZWdvcnk9IndlYiI+PHRpdGxlIGxhbmc9ImVuIj5MZWFybmluZyBYTUw8L3RpdGxlPjxhdXRob3I+RXJpayBULiBSYXk8L2F1dGhvcj48eWVhcj4yMDAzPC95ZWFyPjxwcmljZT4zOS45NTwvcHJpY2U+PC9ib29rPjwvYm9va3N0b3JlPgo="}}`, `PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPGJvb2tzdG9yZT48Ym9vayBjYXRlZ29yeT0iY29va2luZyI+PGF1dGhvcj5HaWFkYSBEZSBMYXVyZW50aWlzPC9hdXRob3I+PHByaWNlPjMwLjAwPC9wcmljZT48dGl0bGUgbGFuZz0iZW4iPkV2ZXJ5ZGF5IEl0YWxpYW48L3RpdGxlPjx5ZWFyPjIwMDU8L3llYXI+PC9ib29rPjxib29rIGNhdGVnb3J5PSJjaGlsZHJlbiI+PGF1dGhvcj5KIEsuIFJvd2xpbmc8L2F1dGhvcj48cHJpY2U+MjkuOTk8L3ByaWNlPjx0aXRsZT5bUkVEQUNURURdPC90aXRsZT48eWVhcj4yMDA1PC95ZWFyPjwvYm9vaz48Ym9vayBjYXRlZ29yeT0id2ViIj48YXV0aG9yPkphbWVzIE1jR292ZXJuPC9hdXRob3I+PGF1dGhvcj5QZXIgQm90aG5lcjwvYXV0aG9yPjxhdXRob3I+S3VydCBDYWdsZTwvYXV0aG9yPjxhdXRob3I+SmFtZXMgTGlubjwvYXV0aG9yPjxhdXRob3I+VmFpZHlhbmF0aGFuIE5hZ2FyYWphbjwvYXV0aG9yPjxwcmljZT40OS45OTwvcHJpY2U+PHRpdGxlIGxhbmc9ImVuIj5YUXVlcnkgS2ljayBTdGFydDwvdGl0bGU+PHllYXI+MjAwMzwveWVhcj48L2Jvb2s+PGJvb2sgY2F0ZWdvcnk9IndlYiI+PGF1dGhvcj5FcmlrIFQuIFJheTwvYXV0aG9yPjxwcmljZT4zOS45NTwvcHJpY2U+PHRpdGxlIGxhbmc9ImVuIj5MZWFybmluZyBYTUw8L3RpdGxlPjx5ZWFyPjIwMDM8L3llYXI+PC9ib29rPjwvYm9va3N0b3JlPg==`, true},
+}
 
-	expr, err := Parse(query)
-	if err != nil {
-		t.Fatal(err.Error())
+func TestEvalRedactJson(t *testing.T) {
+	for _, row := range dataRedact {
+		expr, err := Parse(row.query)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		_, err = Precompute(expr)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		truth, newJson, err := Eval(expr, row.json)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if row.truth {
+			assert.True(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, row.json))
+		} else {
+			assert.False(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, row.json))
+		}
+
+		newObj, err := oj.ParseString(newJson)
+		assert.Nil(t, err)
+
+		jsonPath, err := jp.ParseString("response.body")
+		assert.Nil(t, err)
+
+		nested := jsonPath.Get(newObj)[0].(string)
+
+		base64DecodedNestedJson, err := base64.StdEncoding.DecodeString(nested)
+		if err == nil {
+			nested = string(base64DecodedNestedJson)
+		}
+
+		base64DecodedExpected, err := base64.StdEncoding.DecodeString(row.expected)
+		if err == nil {
+			row.expected = string(base64DecodedExpected)
+		}
+
+		if row.strCompare {
+			assert.Equal(t, row.expected, nested)
+		} else {
+			assert.JSONEq(t, row.expected, nested)
+		}
 	}
-
-	_, err = Precompute(expr)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	truth, newJson, err := Eval(expr, json)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	assert.True(t, truth)
-	assert.Equal(t, expected, newJson)
 }
