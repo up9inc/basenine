@@ -38,15 +38,15 @@ Run the server:
 
 ### Protocol
 
-The database server has six modes:
+The database server has these connection modes:
 
-- **Insert mode** is a long lasting TCP connection to insert data into the `data_*.bin` binary files on server's directory.
+- **Insert mode** is a long lasting TCP connection to insert data into the `data_*.db` binary files on server's directory.
 A client can elevate itself to insert mode by sending `/insert` command.
 
-- **Insertion filter mode** is a short lasting TCP connection that let's you set an insertion filter which is executed
+- **Insertion filter mode** is a short lasting TCP connection that lets you set an insertion filter which is executed
 right before the insertion of each individual record. The default value of insertion filter is an empty string.
 
-- **Query mode** let's you filter the records in the database based on a [filtering syntax named BFL](https://github.com/up9inc/basenine/wiki/BFL-Syntax-Reference).
+- **Query mode** lets you filter the records in the database based on a [filtering syntax named BFL](https://github.com/up9inc/basenine/wiki/BFL-Syntax-Reference).
 Query mode streams the results to the client and is able to keep up where it left off even if the database have millions of records.
 The TCP connection in this mode is long lasting as well. The filter cannot be changed without establishing a new connnection.
 The server also streams the query progress through `/metadata` command to the client.
@@ -58,7 +58,7 @@ starting from a certain offset, supporting both directions.
 
 - **Validate mode** checks the query against syntax errors. Returns the error if it's syntactically invalid otherwise returns `OK`.
 
-- **Macro mode** let's you define a macro for the query language like `http~proto.name == "http"`.
+- **Macro mode** lets you define a macro for the query language like `http~proto.name == "http"`.
 
 - **Limit mode** allows you to set a hard-limit for the database size in bytes like `100000000` (100MB).
 The disk usage ranges between `50000000` (50MB) and `100000000` (100MB).
