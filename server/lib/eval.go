@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/clbanning/mxj/v2"
 	"github.com/ohler55/ojg/jp"
 	oj "github.com/ohler55/ojg/oj"
 )
@@ -196,7 +197,7 @@ func leftOff(args ...interface{}) (interface{}, interface{}) {
 }
 
 func _json(args ...interface{}) (interface{}, interface{}) {
-	jsonString := string(stringOperand(args[1]))
+	jsonString := stringOperand(args[1])
 
 	// Try to base64 decode the JSON string
 	base64Decoded, err := base64.StdEncoding.DecodeString(jsonString)
@@ -216,11 +217,53 @@ func _json(args ...interface{}) (interface{}, interface{}) {
 	return args[0], result[0]
 }
 
+func xml(args ...interface{}) (interface{}, interface{}) {
+	xmlString := stringOperand(args[1])
+	xmlPath := args[2].(*jp.Expr).String()
+
+	// Try to base64 decode the XML string
+	base64Decoded, err := base64.StdEncoding.DecodeString(xmlString)
+	if err == nil {
+		xmlString = string(base64Decoded)
+	}
+
+	mv, err := mxj.NewMapXml([]byte(xmlString))
+	if err != nil {
+		return args[0], false
+	}
+
+	result, err := mv.ValuesForPath(xmlPath)
+	if len(result) < 1 {
+		return args[0], false
+	}
+	return args[0], result[0].(map[string]interface{})["#text"]
+}
+
+func redactXml(obj interface{}, path string) (xmlValue []byte, err error) {
+	nextXML, ok := obj.(string)
+	if !ok {
+		err = errors.New("Not a string")
+		return
+	}
+
+	var mv mxj.Map
+	mv, err = mxj.NewMapXml([]byte(nextXML))
+	if err != nil {
+		return
+	}
+
+	mv.SetValueForPath(REDACTED, path)
+	xmlValue, err = mv.Xml()
+	return
+}
+
 func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err error) {
 	newObj = obj
 	for i, path := range paths {
+		xmlPaths := strings.Split(path, ".xml().")
+
 		var jsonPath jp.Expr
-		jsonPath, err = jp.ParseString(path)
+		jsonPath, err = jp.ParseString(xmlPaths[0])
 		if err != nil {
 			return
 		}
@@ -231,10 +274,19 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 			return
 		}
 
+		if len(xmlPaths) > 1 {
+			var xmlValue []byte
+			xmlValue, err = redactXml(result[0], xmlPaths[1])
+
+			jsonPath.Set(newObj, string(xmlValue))
+			return
+		}
+
 		if i < len(paths)-1 {
 			nextJSON, ok := result[0].(string)
 			if !ok {
 				err = errors.New("Not a string")
+				return
 			}
 
 			var nextObj interface{}
@@ -281,6 +333,7 @@ var helpers = map[string]interface{}{
 	"rlimit":     rlimit,
 	"leftOff":    leftOff,
 	"json":       _json,
+	"xml":        xml,
 	"redact":     redact,
 }
 

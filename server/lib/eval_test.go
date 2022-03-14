@@ -185,3 +185,62 @@ func TestEvalRedactRecursive(t *testing.T) {
 
 	assert.JSONEq(t, expected, nestedJson)
 }
+
+var dataXml = []struct {
+	query string
+	truth bool
+}{
+	{`response.body.xml().bookstore.book[1].title == "Harry Potter"`, true},
+	{`response.body.xml().bookstore.book[1].title == "Lord of the Rings"`, false},
+}
+
+func TestEvalXml(t *testing.T) {
+	for _, row := range dataXml {
+		json := `{"response":{"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<bookstore><book category=\"cooking\"><title lang=\"en\">Everyday Italian</title><author>Giada De Laurentiis</author><year>2005</year><price>30.00</price></book><book category=\"children\"><title lang=\"en\">Harry Potter</title><author>J K. Rowling</author><year>2005</year><price>29.99</price></book><book category=\"web\"><title lang=\"en\">XQuery Kick Start</title><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><year>2003</year><price>49.99</price></book><book category=\"web\"><title lang=\"en\">Learning XML</title><author>Erik T. Ray</author><year>2003</year><price>39.95</price></book></bookstore>\r\n"}}`
+
+		expr, err := Parse(row.query)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		_, err = Precompute(expr)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		truth, _, err := Eval(expr, json)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if row.truth {
+			assert.True(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, json))
+		} else {
+			assert.False(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, json))
+		}
+	}
+}
+
+func TestEvalRedactXml(t *testing.T) {
+	query := `redact("response.body.xml().bookstore.book[1].title")`
+	json := `{"response":{"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<bookstore><book category=\"cooking\"><title lang=\"en\">Everyday Italian</title><author>Giada De Laurentiis</author><year>2005</year><price>30.00</price></book><book category=\"children\"><title lang=\"en\">Harry Potter</title><author>J K. Rowling</author><year>2005</year><price>29.99</price></book><book category=\"web\"><title lang=\"en\">XQuery Kick Start</title><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><year>2003</year><price>49.99</price></book><book category=\"web\"><title lang=\"en\">Learning XML</title><author>Erik T. Ray</author><year>2003</year><price>39.95</price></book></bookstore>\r\n"}}`
+	expected := `{"response":{"body":"<bookstore><book category=\"cooking\"><author>Giada De Laurentiis</author><price>30.00</price><title lang=\"en\">Everyday Italian</title><year>2005</year></book><book category=\"children\"><author>J K. Rowling</author><price>29.99</price><title>[REDACTED]</title><year>2005</year></book><book category=\"web\"><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><price>49.99</price><title lang=\"en\">XQuery Kick Start</title><year>2003</year></book><book category=\"web\"><author>Erik T. Ray</author><price>39.95</price><title lang=\"en\">Learning XML</title><year>2003</year></book></bookstore>"}}`
+
+	expr, err := Parse(query)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	_, err = Precompute(expr)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	truth, newJson, err := Eval(expr, json)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	assert.True(t, truth)
+	assert.Equal(t, expected, newJson)
+}
