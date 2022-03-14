@@ -1119,7 +1119,11 @@ func retrieveSingle(conn net.Conn, args []string) (err error) {
 	}
 
 	// Safely acces the offsets and partition references
-	n, f, err := getOffsetAndPartition(index - int(removedOffsetsCounter))
+	xLeftOff := index - int(removedOffsetsCounter)
+	if xLeftOff < 0 {
+		xLeftOff = 0
+	}
+	n, f, err := getOffsetAndPartition(xLeftOff)
 
 	// Record can only be removed if the partition of the record
 	// that it belongs to is removed. Therefore a file open error
