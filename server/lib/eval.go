@@ -242,6 +242,15 @@ func xml(args ...interface{}) (interface{}, interface{}) {
 func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err error) {
 	newObj = obj
 	for i, path := range paths {
+		// xml helper
+		var xmlPath string
+		re := regexp.MustCompile(`(.*)\.xml\(\\"(.*)\\"\)`)
+		matches := re.FindAllStringSubmatch(path, -1)
+		if len(matches) > 0 && len(matches[0]) == 3 {
+			path = matches[0][1]
+			xmlPath = matches[0][2]
+		}
+
 		var jsonPath jp.Expr
 		jsonPath, err = jp.ParseString(path)
 		if err != nil {
@@ -254,10 +263,21 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 			return
 		}
 
+		if len(xmlPath) > 0 {
+			// nextXML, ok := result[0].(string)
+			// if !ok {
+			// 	err = errors.New("Not a string")
+			// 	return
+			// }
+
+			// TODO: Fill here
+		}
+
 		if i < len(paths)-1 {
 			nextJSON, ok := result[0].(string)
 			if !ok {
 				err = errors.New("Not a string")
+				return
 			}
 
 			var nextObj interface{}

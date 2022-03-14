@@ -220,3 +220,26 @@ func TestEvalXml(t *testing.T) {
 		}
 	}
 }
+
+func TestEvalRedactXml(t *testing.T) {
+	query := `redact("response.body.xml(\"/bookstore/book[2]/title\")")`
+	json := `{"response":{"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<bookstore><book category=\"cooking\"><title lang=\"en\">Everyday Italian</title><author>Giada De Laurentiis</author><year>2005</year><price>30.00</price></book><book category=\"children\"><title lang=\"en\">Harry Potter</title><author>J K. Rowling</author><year>2005</year><price>29.99</price></book><book category=\"web\"><title lang=\"en\">XQuery Kick Start</title><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><year>2003</year><price>49.99</price></book><book category=\"web\"><title lang=\"en\">Learning XML</title><author>Erik T. Ray</author><year>2003</year><price>39.95</price></book></bookstore>\r\n"}}`
+
+	expr, err := Parse(query)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	_, err = Precompute(expr)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	truth, newJson, err := Eval(expr, json)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	fmt.Printf("truth: %v\n", truth)
+	fmt.Printf("newJson: %v\n", newJson)
+}
