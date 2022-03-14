@@ -228,6 +228,9 @@ func xml(args ...interface{}) (interface{}, interface{}) {
 	}
 
 	mv, err := mxj.NewMapXml([]byte(xmlString))
+	if err != nil {
+		return args[0], false
+	}
 
 	result, err := mv.ValuesForPath(xmlPath)
 	if len(result) < 1 {
@@ -236,20 +239,31 @@ func xml(args ...interface{}) (interface{}, interface{}) {
 	return args[0], result[0].(map[string]interface{})["#text"]
 }
 
+func redactXml(obj interface{}, path string) (xmlValue []byte, err error) {
+	nextXML, ok := obj.(string)
+	if !ok {
+		err = errors.New("Not a string")
+		return
+	}
+
+	var mv mxj.Map
+	mv, err = mxj.NewMapXml([]byte(nextXML))
+	if err != nil {
+		return
+	}
+
+	mv.SetValueForPath(REDACTED, path)
+	xmlValue, err = mv.Xml()
+	return
+}
+
 func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err error) {
 	newObj = obj
 	for i, path := range paths {
-		// xml helper
-		var xmlPath string
-		re := regexp.MustCompile(`(.*)\.xml\(\\"(.*)\\"\)`)
-		matches := re.FindAllStringSubmatch(path, -1)
-		if len(matches) > 0 && len(matches[0]) == 3 {
-			path = matches[0][1]
-			xmlPath = matches[0][2]
-		}
+		xmlPaths := strings.Split(path, ".xml().")
 
 		var jsonPath jp.Expr
-		jsonPath, err = jp.ParseString(path)
+		jsonPath, err = jp.ParseString(xmlPaths[0])
 		if err != nil {
 			return
 		}
@@ -260,14 +274,12 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 			return
 		}
 
-		if len(xmlPath) > 0 {
-			// nextXML, ok := result[0].(string)
-			// if !ok {
-			// 	err = errors.New("Not a string")
-			// 	return
-			// }
+		if len(xmlPaths) > 1 {
+			var xmlValue []byte
+			xmlValue, err = redactXml(result[0], xmlPaths[1])
 
-			// TODO: Fill here
+			jsonPath.Set(newObj, string(xmlValue))
+			return
 		}
 
 		if i < len(paths)-1 {
