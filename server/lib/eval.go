@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antchfx/xmlquery"
+	"github.com/clbanning/mxj/v2"
 	"github.com/ohler55/ojg/jp"
 	oj "github.com/ohler55/ojg/oj"
 )
@@ -197,7 +197,7 @@ func leftOff(args ...interface{}) (interface{}, interface{}) {
 }
 
 func _json(args ...interface{}) (interface{}, interface{}) {
-	jsonString := string(stringOperand(args[1]))
+	jsonString := stringOperand(args[1])
 
 	// Try to base64 decode the JSON string
 	base64Decoded, err := base64.StdEncoding.DecodeString(jsonString)
@@ -219,7 +219,7 @@ func _json(args ...interface{}) (interface{}, interface{}) {
 
 func xml(args ...interface{}) (interface{}, interface{}) {
 	xmlString := stringOperand(args[1])
-	query := stringOperand(args[2])
+	xmlPath := args[2].(*jp.Expr).String()
 
 	// Try to base64 decode the XML string
 	base64Decoded, err := base64.StdEncoding.DecodeString(xmlString)
@@ -227,16 +227,13 @@ func xml(args ...interface{}) (interface{}, interface{}) {
 		xmlString = string(base64Decoded)
 	}
 
-	doc, err := xmlquery.Parse(strings.NewReader(xmlString))
-	if err != nil {
-		return args[0], false
-	}
+	mv, err := mxj.NewMapXml([]byte(xmlString))
 
-	result := xmlquery.Find(doc, query)
+	result, err := mv.ValuesForPath(xmlPath)
 	if len(result) < 1 {
 		return args[0], false
 	}
-	return args[0], result[0].InnerText()
+	return args[0], result[0].(map[string]interface{})["#text"]
 }
 
 func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err error) {

@@ -69,7 +69,7 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 			potentialHelper := &segments[len(segments)-1]
 			// Determine whether the .json() helper is used or not
 			jsonHelperUsed := false
-			if *potentialHelper == "json" {
+			if *potentialHelper == "json" || *potentialHelper == "xml" {
 				helper = potentialHelper
 				jsonHelperUsed = true
 			}
