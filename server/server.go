@@ -963,8 +963,12 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 		// Safely access the next part of offsets and partition references.
 		cs.RLock()
-		subOffsets := cs.offsets[leftOff-int64(cs.removedOffsetsCounter):]
-		subPartitionRefs := cs.partitionRefs[leftOff-int64(cs.removedOffsetsCounter):]
+		xLeftOff := leftOff - int64(cs.removedOffsetsCounter)
+		if xLeftOff < 0 {
+			xLeftOff = 0
+		}
+		subOffsets := cs.offsets[xLeftOff:]
+		subPartitionRefs := cs.partitionRefs[xLeftOff:]
 		totalNumberOfRecords := cs.metaOffsetsLength - cs.removedOffsetsCounter
 		truncatedTimestamp := cs.truncatedTimestamp
 		cs.RUnlock()
@@ -1217,12 +1221,16 @@ func fetch(conn net.Conn, args []string) {
 	cs.RLock()
 	totalNumberOfRecords = cs.metaOffsetsLength
 	truncatedTimestamp = cs.truncatedTimestamp
+	xLeftOff := leftOff - int64(cs.removedOffsetsCounter)
+	if xLeftOff < 0 {
+		xLeftOff = 0
+	}
 	if direction < 0 {
-		subOffsets = cs.offsets[:leftOff-int64(cs.removedOffsetsCounter)]
-		subPartitionRefs = cs.partitionRefs[:leftOff-int64(cs.removedOffsetsCounter)]
+		subOffsets = cs.offsets[:xLeftOff]
+		subPartitionRefs = cs.partitionRefs[:xLeftOff]
 	} else {
-		subOffsets = cs.offsets[leftOff-int64(cs.removedOffsetsCounter):]
-		subPartitionRefs = cs.partitionRefs[leftOff-int64(cs.removedOffsetsCounter):]
+		subOffsets = cs.offsets[xLeftOff:]
+		subPartitionRefs = cs.partitionRefs[xLeftOff:]
 	}
 	cs.RUnlock()
 
