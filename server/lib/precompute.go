@@ -57,7 +57,7 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 // computeCallExpression does compile-time evaluations for the
 // CallExpression struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computeCallExpression(call *CallExpression, prependPath string, jsonHelper bool) (jsonPath *jp.Expr, helper *string, prop Propagate, err error) {
+func computeCallExpression(call *CallExpression, prependPath string, jsonHelperPath string) (jsonPath *jp.Expr, helper *string, prop Propagate, err error) {
 	if call.Parameters == nil {
 		// Not a function call
 		if call.Identifier != nil {
@@ -72,6 +72,7 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 			if *potentialHelper == "json" || *potentialHelper == "xml" {
 				helper = potentialHelper
 				jsonHelperUsed = true
+				jsonHelperPath = prop.Path
 			}
 
 			if call.SelectExpression.Index != nil {
@@ -81,7 +82,7 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 					if err == nil {
 						call.Parameters = []*Parameter{{JsonPath: &jsonPathParam}}
 					}
-					jsonHelper = false
+					prop.Path = fmt.Sprintf("[%d]", *call.SelectExpression.Index)
 				} else {
 					prop.Path = fmt.Sprintf("%s[%d]", prop.Path, *call.SelectExpression.Index)
 				}
@@ -92,7 +93,7 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 					if err == nil {
 						call.Parameters = []*Parameter{{JsonPath: &jsonPathParam}}
 					}
-					jsonHelper = false
+					prop.Path = fmt.Sprintf("[\"%s\"]", strings.Trim(*call.SelectExpression.Key, "\""))
 				} else {
 					prop.Path = fmt.Sprintf("%s[\"%s\"]", prop.Path, strings.Trim(*call.SelectExpression.Key, "\""))
 				}
@@ -101,7 +102,11 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 			// Queries like `request.headers["x"].y == "z"`` or `request.body.json().some.path` goes here
 			if call.SelectExpression.Expression != nil {
 				var _prop Propagate
-				_prop, err = computeExpression(call.SelectExpression.Expression, prop.Path, jsonHelperUsed)
+				propPath := prop.Path
+				if jsonHelperUsed {
+					propPath = ""
+				}
+				_prop, err = computeExpression(call.SelectExpression.Expression, propPath, jsonHelperPath)
 				prop.Limit = _prop.Limit
 				prop.Rlimit = _prop.Rlimit
 				prop.LeftOff = _prop.LeftOff
@@ -113,20 +118,18 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 		prop.Path = *call.Identifier
 	}
 
-	// Build JSONPath
-	if jsonHelper {
-		// If .json() helper is used
+	prop.Path = fmt.Sprintf("%s.%s", prependPath, prop.Path)
+
+	var _jsonPath jp.Expr
+	if jsonHelperPath != "" {
 		jsonPathParam, err := jp.ParseString(prop.Path)
 		if err == nil {
 			call.Parameters = []*Parameter{{JsonPath: &jsonPathParam}}
 		}
-		jsonHelper = false
-		prop.Path = prependPath
-	} else {
-		// else concatenate the paths
-		prop.Path = fmt.Sprintf("%s.%s", prependPath, prop.Path)
+		prop.Path = jsonHelperPath
 	}
-	_jsonPath, err := jp.ParseString(prop.Path)
+
+	_jsonPath, err = jp.ParseString(prop.Path)
 
 	// If it's a function call, determine the name of helper method.
 	if call.Parameters != nil {
@@ -159,11 +162,11 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelper 
 // computePrimary does compile-time evaluations for the
 // Primary struct. Populates the non-gramatical fields in Primary struct
 // according to the parsing results.
-func computePrimary(pri *Primary, prependPath string, jsonHelper bool) (prop Propagate, err error) {
+func computePrimary(pri *Primary, prependPath string, jsonHelperPath string) (prop Propagate, err error) {
 	if pri.SubExpression != nil {
-		prop, err = computeExpression(pri.SubExpression, prependPath, jsonHelper)
+		prop, err = computeExpression(pri.SubExpression, prependPath, jsonHelperPath)
 	} else if pri.CallExpression != nil {
-		pri.JsonPath, pri.Helper, prop, err = computeCallExpression(pri.CallExpression, prependPath, jsonHelper)
+		pri.JsonPath, pri.Helper, prop, err = computeCallExpression(pri.CallExpression, prependPath, jsonHelperPath)
 	} else if pri.Regex != nil {
 		pri.Regexp, err = regexp.Compile(strings.Trim(*pri.Regex, "\""))
 	}
@@ -171,56 +174,56 @@ func computePrimary(pri *Primary, prependPath string, jsonHelper bool) (prop Pro
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeUnary(unar *Unary, prependPath string, jsonHelper bool) (prop Propagate, err error) {
+func computeUnary(unar *Unary, prependPath string, jsonHelperPath string) (prop Propagate, err error) {
 	var _prop Propagate
 	if unar.Unary != nil {
-		prop, err = computeUnary(unar.Unary, prependPath, jsonHelper)
+		prop, err = computeUnary(unar.Unary, prependPath, jsonHelperPath)
 	} else {
-		_prop, err = computePrimary(unar.Primary, prependPath, jsonHelper)
+		_prop, err = computePrimary(unar.Primary, prependPath, jsonHelperPath)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeComparison(comp *Comparison, prependPath string, jsonHelper bool) (prop Propagate, err error) {
+func computeComparison(comp *Comparison, prependPath string, jsonHelperPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	prop, err = computeUnary(comp.Unary, prependPath, jsonHelper)
+	prop, err = computeUnary(comp.Unary, prependPath, jsonHelperPath)
 	if comp.Next != nil {
-		_prop, err = computeComparison(comp.Next, prependPath, jsonHelper)
+		_prop, err = computeComparison(comp.Next, prependPath, jsonHelperPath)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeEquality(equ *Equality, prependPath string, jsonHelper bool) (prop Propagate, err error) {
+func computeEquality(equ *Equality, prependPath string, jsonHelperPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	prop, err = computeComparison(equ.Comparison, prependPath, jsonHelper)
+	prop, err = computeComparison(equ.Comparison, prependPath, jsonHelperPath)
 	if equ.Next != nil {
-		_prop, err = computeEquality(equ.Next, prependPath, jsonHelper)
+		_prop, err = computeEquality(equ.Next, prependPath, jsonHelperPath)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeLogical(logic *Logical, prependPath string, jsonHelper bool) (prop Propagate, err error) {
+func computeLogical(logic *Logical, prependPath string, jsonHelperPath string) (prop Propagate, err error) {
 	var _prop Propagate
-	prop, err = computeEquality(logic.Equality, prependPath, jsonHelper)
+	prop, err = computeEquality(logic.Equality, prependPath, jsonHelperPath)
 	if logic.Next != nil {
-		_prop, err = computeLogical(logic.Next, prependPath, jsonHelper)
+		_prop, err = computeLogical(logic.Next, prependPath, jsonHelperPath)
 		prop = backpropagate(prop, _prop)
 	}
 	return
 }
 
 // Gateway method for doing compile-time evaluations on Primary struct
-func computeExpression(expr *Expression, prependPath string, jsonHelper bool) (prop Propagate, err error) {
+func computeExpression(expr *Expression, prependPath string, jsonHelperPath string) (prop Propagate, err error) {
 	if expr.Logical == nil {
 		return
 	}
-	prop, err = computeLogical(expr.Logical, prependPath, jsonHelper)
+	prop, err = computeLogical(expr.Logical, prependPath, jsonHelperPath)
 	return
 }
 
@@ -228,6 +231,6 @@ func computeExpression(expr *Expression, prependPath string, jsonHelper bool) (p
 // to prevent unnecessary computations in Eval() method.
 // Modifies the fields of only the Primary struct.
 func Precompute(expr *Expression) (prop Propagate, err error) {
-	prop, err = computeExpression(expr, "", false)
+	prop, err = computeExpression(expr, "", "")
 	return
 }

@@ -190,8 +190,8 @@ var dataXml = []struct {
 	query string
 	truth bool
 }{
-	{`response.body.xml().bookstore.book[0].title == "Harry Potter"`, true},
-	{`response.body.xml().bookstore.book[0].title == "Lord of the Rings"`, false},
+	{`response.body.xml().bookstore.book[1].title == "Harry Potter"`, true},
+	{`response.body.xml().bookstore.book[1].title == "Lord of the Rings"`, false},
 }
 
 func TestEvalXml(t *testing.T) {
