@@ -5,8 +5,10 @@
 package basenine
 
 import (
+	"bufio"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -236,7 +238,12 @@ func xml(args ...interface{}) (interface{}, interface{}) {
 	if len(result) < 1 {
 		return args[0], false
 	}
-	return args[0], result[0].(map[string]interface{})["#text"]
+
+	value, ok := result[0].(string)
+	if !ok {
+		value = result[0].(map[string]interface{})["#text"].(string)
+	}
+	return args[0], value
 }
 
 func redactXml(obj interface{}, path string) (xmlValue []byte, err error) {
@@ -244,6 +251,14 @@ func redactXml(obj interface{}, path string) (xmlValue []byte, err error) {
 	if !ok {
 		err = errors.New("Not a string")
 		return
+	}
+
+	// Try to base64 decode the XML string
+	base64Decoded, err := base64.StdEncoding.DecodeString(nextXML)
+	base64Encode := false
+	if err == nil {
+		nextXML = string(base64Decoded)
+		base64Encode = true
 	}
 
 	var mv mxj.Map
@@ -254,6 +269,15 @@ func redactXml(obj interface{}, path string) (xmlValue []byte, err error) {
 
 	mv.SetValueForPath(REDACTED, path)
 	xmlValue, err = mv.Xml()
+	if len(nextXML) > 2 && nextXML[0:2] == "<?" {
+		scanner := bufio.NewScanner(strings.NewReader(nextXML))
+		scanner.Scan()
+		xmlValue = []byte(fmt.Sprintf("%s\n%s", scanner.Text(), string(xmlValue)))
+	}
+
+	if base64Encode {
+		xmlValue = []byte(base64.StdEncoding.EncodeToString(xmlValue))
+	}
 	return
 }
 
@@ -289,6 +313,15 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 				return
 			}
 
+			// Try to base64 decode the JSON string
+			var base64Decoded []byte
+			base64Decoded, err = base64.StdEncoding.DecodeString(nextJSON)
+			base64Encode := false
+			if err == nil {
+				nextJSON = string(base64Decoded)
+				base64Encode = false
+			}
+
 			var nextObj interface{}
 			nextObj, err = oj.ParseString(nextJSON)
 			if err != nil {
@@ -301,7 +334,12 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 				return
 			}
 
-			jsonPath.Set(newObj, oj.JSON(nextReturnObj))
+			newValue := oj.JSON(nextReturnObj)
+			if base64Encode {
+				newValue = base64.StdEncoding.EncodeToString([]byte(newValue))
+			}
+
+			jsonPath.Set(newObj, newValue)
 			return
 		}
 
