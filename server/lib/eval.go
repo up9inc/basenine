@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antchfx/xmlquery"
 	"github.com/ohler55/ojg/jp"
 	oj "github.com/ohler55/ojg/oj"
 )
@@ -216,6 +217,28 @@ func _json(args ...interface{}) (interface{}, interface{}) {
 	return args[0], result[0]
 }
 
+func xml(args ...interface{}) (interface{}, interface{}) {
+	xmlString := stringOperand(args[1])
+	query := stringOperand(args[2])
+
+	// Try to base64 decode the XML string
+	base64Decoded, err := base64.StdEncoding.DecodeString(xmlString)
+	if err == nil {
+		xmlString = string(base64Decoded)
+	}
+
+	doc, err := xmlquery.Parse(strings.NewReader(xmlString))
+	if err != nil {
+		return args[0], false
+	}
+
+	result := xmlquery.Find(doc, query)
+	if len(result) < 1 {
+		return args[0], false
+	}
+	return args[0], result[0].InnerText()
+}
+
 func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err error) {
 	newObj = obj
 	for i, path := range paths {
@@ -281,6 +304,7 @@ var helpers = map[string]interface{}{
 	"rlimit":     rlimit,
 	"leftOff":    leftOff,
 	"json":       _json,
+	"xml":        xml,
 	"redact":     redact,
 }
 

@@ -185,3 +185,38 @@ func TestEvalRedactRecursive(t *testing.T) {
 
 	assert.JSONEq(t, expected, nestedJson)
 }
+
+var dataXml = []struct {
+	query string
+	truth bool
+}{
+	{`response.body.xml("/bookstore/book[2]/title") == "Harry Potter"`, true},
+	{`response.body.xml("/bookstore/book[2]/title") == "Lord of the Rings"`, false},
+}
+
+func TestEvalXml(t *testing.T) {
+	for _, row := range dataXml {
+		json := `{"response":{"body":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<bookstore><book category=\"cooking\"><title lang=\"en\">Everyday Italian</title><author>Giada De Laurentiis</author><year>2005</year><price>30.00</price></book><book category=\"children\"><title lang=\"en\">Harry Potter</title><author>J K. Rowling</author><year>2005</year><price>29.99</price></book><book category=\"web\"><title lang=\"en\">XQuery Kick Start</title><author>James McGovern</author><author>Per Bothner</author><author>Kurt Cagle</author><author>James Linn</author><author>Vaidyanathan Nagarajan</author><year>2003</year><price>49.99</price></book><book category=\"web\"><title lang=\"en\">Learning XML</title><author>Erik T. Ray</author><year>2003</year><price>39.95</price></book></bookstore>\r\n"}}`
+
+		expr, err := Parse(row.query)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		_, err = Precompute(expr)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		truth, _, err := Eval(expr, json)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if row.truth {
+			assert.True(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, json))
+		} else {
+			assert.False(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, json))
+		}
+	}
+}
