@@ -6,6 +6,7 @@ package basenine
 
 import (
 	"encoding/base64"
+	"errors"
 	"regexp"
 	"strconv"
 	"strings"
@@ -215,18 +216,57 @@ func _json(args ...interface{}) (interface{}, interface{}) {
 	return args[0], result[0]
 }
 
+func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err error) {
+	newObj = obj
+	for i, path := range paths {
+		var jsonPath jp.Expr
+		jsonPath, err = jp.ParseString(path)
+		if err != nil {
+			return
+		}
+
+		result := jsonPath.Get(obj)
+		if len(result) < 1 {
+			err = errors.New("No match")
+			return
+		}
+
+		if i < len(paths)-1 {
+			nextJSON, ok := result[0].(string)
+			if !ok {
+				err = errors.New("Not a string")
+			}
+
+			var nextObj interface{}
+			nextObj, err = oj.ParseString(nextJSON)
+			if err != nil {
+				return
+			}
+
+			var nextReturnObj interface{}
+			nextReturnObj, err = redactRecursively(nextObj, paths[i+1:])
+			if err != nil {
+				return
+			}
+
+			jsonPath.Set(newObj, oj.JSON(nextReturnObj))
+			return
+		}
+
+		jsonPath.Set(newObj, REDACTED)
+	}
+	return
+}
+
 func redact(args ...interface{}) (interface{}, interface{}) {
 	obj := args[0]
 	for _, param := range args[2:] {
-		jsonPath, err := jp.ParseString(stringOperand(param))
+		paths := strings.Split(stringOperand(param), ".json().")
+		var err error
+		obj, err = redactRecursively(obj, paths)
 		if err != nil {
 			continue
 		}
-		result := jsonPath.Get(obj)
-		if len(result) < 1 {
-			continue
-		}
-		jsonPath.Set(obj, REDACTED)
 	}
 	return obj, true
 }
