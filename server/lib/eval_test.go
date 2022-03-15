@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ohler55/ojg/jp"
 	oj "github.com/ohler55/ojg/oj"
@@ -274,6 +275,68 @@ func TestEvalRedactJson(t *testing.T) {
 			assert.Equal(t, row.expected, nested)
 		} else {
 			assert.JSONEq(t, row.expected, nested)
+		}
+	}
+}
+
+var dataTimeHelpers = []struct {
+	query string
+	truth bool
+}{
+	{`timestamp <= now()`, true},
+	{`timestamp >= now()`, false},
+	{`timestamp <= seconds(-5)`, false},
+	{`timestamp >= seconds(-5)`, true},
+	{`timestamp <= minutes(-5)`, false},
+	{`timestamp >= minutes(-5)`, true},
+	{`timestamp <= hours(-5)`, false},
+	{`timestamp >= hours(-5)`, true},
+	{`timestamp <= days(-5)`, false},
+	{`timestamp >= days(-5)`, true},
+	{`timestamp <= weeks(-5)`, false},
+	{`timestamp >= weeks(-5)`, true},
+	{`timestamp <= months(-5)`, false},
+	{`timestamp >= months(-5)`, true},
+	{`timestamp <= years(-5)`, false},
+	{`timestamp >= years(-5)`, true},
+	{`timestamp <= seconds(5)`, true},
+	{`timestamp >= seconds(5)`, false},
+	{`timestamp <= minutes(5)`, true},
+	{`timestamp >= minutes(5)`, false},
+	{`timestamp <= hours(5)`, true},
+	{`timestamp >= hours(5)`, false},
+	{`timestamp <= days(5)`, true},
+	{`timestamp >= days(5)`, false},
+	{`timestamp <= weeks(5)`, true},
+	{`timestamp >= weeks(5)`, false},
+	{`timestamp <= months(5)`, true},
+	{`timestamp >= months(5)`, false},
+	{`timestamp <= years(5)`, true},
+	{`timestamp >= years(5)`, false},
+}
+
+func TestEvalTimeHelpers(t *testing.T) {
+	json := fmt.Sprintf(`{"id":114905,"model":"Camaro","brand":{"name":"Chevrolet"},"timestamp":%d}`, time.Now().Add(time.Duration(-2)*time.Second).UnixNano()/int64(time.Millisecond))
+	for _, row := range dataTimeHelpers {
+		expr, err := Parse(row.query)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		_, err = Precompute(expr)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		truth, _, err := Eval(expr, json)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if row.truth {
+			assert.True(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, json))
+		} else {
+			assert.False(t, truth, fmt.Sprintf("Query: `%s` JSON: %s", row.query, json))
 		}
 	}
 }

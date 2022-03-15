@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	jp "github.com/ohler55/ojg/jp"
 )
@@ -16,6 +17,14 @@ var compileTimeEvaluatedHelpers = []string{
 	"limit",
 	"rlimit",
 	"leftOff",
+	"now",
+	"seconds",
+	"minutes",
+	"hours",
+	"days",
+	"weeks",
+	"months",
+	"years",
 }
 
 type Propagate struct {
@@ -131,16 +140,19 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelperP
 
 	_jsonPath, err = jp.ParseString(prop.Path)
 
+	segments := strings.Split(prop.Path, ".")
+	_helper := &segments[len(segments)-1]
+
 	// If it's a function call, determine the name of helper method.
 	if call.Parameters != nil {
-		segments := strings.Split(prop.Path, ".")
-		helper = &segments[len(segments)-1]
+		helper = _helper
 		_jsonPath = _jsonPath[:len(_jsonPath)-1]
 
 		if strContains(compileTimeEvaluatedHelpers, *helper) {
 			if len(call.Parameters) > 0 {
 				// We don't alter the record on compile-time. So the second record value is disabled
 				v, _, err := evalExpression(call.Parameters[0].Expression, nil)
+				now := time.Now()
 				if err == nil {
 					switch *helper {
 					case "rlimit":
@@ -149,9 +161,36 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelperP
 						prop.Limit = uint64(float64Operand(v))
 					case "leftOff":
 						prop.LeftOff = int64(float64Operand(v))
+					case "seconds":
+						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Second)
+						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}
+					case "minutes":
+						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Minute)
+						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}
+					case "hours":
+						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Hour)
+						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}
+					case "days":
+						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Hour * 24)
+						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}
+					case "weeks":
+						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Hour * 24 * 7)
+						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}
+					case "months":
+						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Hour * 24 * 30)
+						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}
+					case "years":
+						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Hour * 24 * 365)
+						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}
 					}
 				}
 			}
+		}
+	} else {
+		// now helper
+		if *_helper == compileTimeEvaluatedHelpers[3] {
+			helper = _helper
+			call.Parameters = []*Parameter{{TimeSet: true, Time: time.Now()}}
 		}
 	}
 

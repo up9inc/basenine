@@ -530,6 +530,11 @@ func redact(args ...interface{}) (interface{}, interface{}) {
 	return obj, true
 }
 
+func timeHelper(args ...interface{}) (interface{}, interface{}) {
+	timestamp := args[2].(time.Time).UnixNano() / int64(time.Millisecond)
+	return args[0], timestamp
+}
+
 // Map of helper methods
 var helpers = map[string]interface{}{
 	"startsWith": startsWith,
@@ -542,6 +547,14 @@ var helpers = map[string]interface{}{
 	"json":       _json,
 	"xml":        xml,
 	"redact":     redact,
+	"now":        timeHelper,
+	"seconds":    timeHelper,
+	"minutes":    timeHelper,
+	"hours":      timeHelper,
+	"days":       timeHelper,
+	"weeks":      timeHelper,
+	"months":     timeHelper,
+	"years":      timeHelper,
 }
 
 // Iterates and evaulates each parameter of a given function call
@@ -550,6 +563,8 @@ func evalParameters(params []*Parameter, obj interface{}) (vs []interface{}, err
 		var v interface{}
 		if param.JsonPath != nil {
 			v = param.JsonPath
+		} else if param.TimeSet {
+			v = param.Time
 		} else {
 			v, _, err = evalExpression(param.Expression, obj)
 		}
