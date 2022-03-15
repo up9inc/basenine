@@ -6,6 +6,7 @@ package basenine
 
 import (
 	"regexp"
+	"time"
 
 	"github.com/alecthomas/participle/v2"
 	jp "github.com/ohler55/ojg/jp"
@@ -68,6 +69,8 @@ type Parameter struct {
 	Tag        *string     `[ @Ident ":" ]`
 	Expression *Expression `@@`
 	JsonPath   *jp.Expr
+	TimeSet    bool
+	Time       time.Time
 }
 
 var parser = participle.MustBuild(&Expression{}, participle.UseLookahead(2))
