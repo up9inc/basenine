@@ -319,7 +319,7 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 			base64Encode := false
 			if err == nil {
 				nextJSON = string(base64Decoded)
-				base64Encode = false
+				base64Encode = true
 			}
 
 			var nextObj interface{}
