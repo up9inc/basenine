@@ -1146,6 +1146,7 @@ func retrieveSingle(conn net.Conn, args []string) (err error) {
 	expr, _, err := prepareQuery(query)
 	if err != nil {
 		conn.Close()
+		return
 	}
 	_, record, err := basenine.Eval(expr, string(b))
 	check(err)
