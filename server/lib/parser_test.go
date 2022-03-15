@@ -1158,6 +1158,88 @@ rule(
 	assert.Equal(t, expect, expr)
 }
 
+func TestParserWildcard(t *testing.T) {
+	text := `
+request.path.*.x
+	`
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	// repr.Println(expr)
+
+	val1 := "request.path.*.x"
+
+	expect := &Expression{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
+					Unary: &Unary{
+						Primary: &Primary{
+							CallExpression: &CallExpression{
+								Identifier: &val1,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, expect, expr)
+}
+
+func TestParserWildcardIndex(t *testing.T) {
+	text := `
+request.path[*].x
+	`
+	expr, err := Parse(text)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	// repr.Println(expr)
+
+	val1 := "request.path"
+	val2 := "*"
+	val3 := "x"
+
+	expect := &Expression{
+		Logical: &Logical{
+			Equality: &Equality{
+				Comparison: &Comparison{
+					Unary: &Unary{
+						Primary: &Primary{
+							CallExpression: &CallExpression{
+								Identifier: &val1,
+								SelectExpression: &SelectExpression{
+									Key: &val2,
+									Expression: &Expression{
+										Logical: &Logical{
+											Equality: &Equality{
+												Comparison: &Comparison{
+													Unary: &Unary{
+														Primary: &Primary{
+															CallExpression: &CallExpression{
+																Identifier: &val3,
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, expect, expr)
+}
+
 func TestParserSyntaxErrorLiteralNotTerminated(t *testing.T) {
 	text := `
 =.="
@@ -1171,5 +1253,5 @@ func TestParserSyntaxErrorUnexpectedToken(t *testing.T) {
 request.path[3.14] == "hello"
 	`
 	_, err := Parse(text)
-	assert.EqualError(t, err, "2:14: unexpected token \"3.14\" (expected (<string> | <char> | <rawstring>) \"]\")")
+	assert.EqualError(t, err, "2:14: unexpected token \"3.14\" (expected (<string> | <char> | <rawstring> | \"*\") \"]\")")
 }

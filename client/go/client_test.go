@@ -79,7 +79,7 @@ func TestValidate(t *testing.T) {
 	assert.EqualError(t, err, `1:1: unexpected token "="`)
 
 	err = Validate(HOST, PORT, `request.path[3.14] == "hello"`)
-	assert.EqualError(t, err, `1:14: unexpected token "3.14" (expected (<string> | <char> | <rawstring>) "]")`)
+	assert.EqualError(t, err, `1:14: unexpected token "3.14" (expected (<string> | <char> | <rawstring> | "*") "]")`)
 }
 
 func TestQuery(t *testing.T) {

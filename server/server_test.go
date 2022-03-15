@@ -388,7 +388,7 @@ var validateModeData = []struct {
 }{
 	{`brand.name == "Chevrolet"`, `OK`},
 	{`=.=`, `1:1: unexpected token "="`},
-	{`request.path[3.14] == "hello"`, `1:14: unexpected token "3.14" (expected (<string> | <char> | <rawstring>) "]")`},
+	{`request.path[3.14] == "hello"`, `1:14: unexpected token "3.14" (expected (<string> | <char> | <rawstring> | "*") "]")`},
 }
 
 func TestServerProtocolValidateMode(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,6 +36,8 @@ func boolOperand(operand interface{}) bool {
 		_operand = operand.(float64) > 0
 	case nil:
 		_operand = false
+	case []interface{}:
+		_operand = len(operand.([]interface{})) > 0
 	}
 	return _operand
 }
@@ -101,10 +104,29 @@ func eql(operand1 interface{}, operand2 interface{}) bool {
 	switch operand1.(type) {
 	case *regexp.Regexp:
 		return operand1.(*regexp.Regexp).MatchString(stringOperand(operand2))
+	case []interface{}:
+		switch operand2.(type) {
+		case []interface{}:
+			return reflect.DeepEqual(operand1, operand2)
+		default:
+			for _, i := range operand1.([]interface{}) {
+				if stringOperand(i) == stringOperand(operand2) {
+					return true
+				}
+			}
+			return false
+		}
 	default:
 		switch operand2.(type) {
 		case *regexp.Regexp:
 			return operand2.(*regexp.Regexp).MatchString(stringOperand(operand1))
+		case []interface{}:
+			for _, i := range operand2.([]interface{}) {
+				if stringOperand(operand1) == stringOperand(i) {
+					return true
+				}
+			}
+			return false
 		default:
 			return stringOperand(operand1) == stringOperand(operand2)
 		}
@@ -115,10 +137,29 @@ func neq(operand1 interface{}, operand2 interface{}) bool {
 	switch operand1.(type) {
 	case *regexp.Regexp:
 		return !operand1.(*regexp.Regexp).MatchString(stringOperand(operand2))
+	case []interface{}:
+		switch operand2.(type) {
+		case []interface{}:
+			return !reflect.DeepEqual(operand1, operand2)
+		default:
+			for _, i := range operand1.([]interface{}) {
+				if stringOperand(i) == stringOperand(operand2) {
+					return false
+				}
+			}
+			return true
+		}
 	default:
 		switch operand2.(type) {
 		case *regexp.Regexp:
 			return !operand2.(*regexp.Regexp).MatchString(stringOperand(operand1))
+		case []interface{}:
+			for _, i := range operand2.([]interface{}) {
+				if stringOperand(operand1) == stringOperand(i) {
+					return false
+				}
+			}
+			return true
 		default:
 			return stringOperand(operand1) != stringOperand(operand2)
 		}
@@ -132,19 +173,147 @@ var equalityOperations = map[string]interface{}{
 }
 
 func gtr(operand1 interface{}, operand2 interface{}) bool {
-	return float64Operand(operand1) > float64Operand(operand2)
+	switch operand1.(type) {
+	case []interface{}:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand1.([]interface{}) {
+				for _, j := range operand2.([]interface{}) {
+					if float64Operand(i) <= float64Operand(j) {
+						return false
+					}
+				}
+			}
+			return true
+		default:
+			for _, i := range operand1.([]interface{}) {
+				if float64Operand(i) > float64Operand(operand2) {
+					return true
+				}
+			}
+			return false
+		}
+	default:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand2.([]interface{}) {
+				if float64Operand(operand1) > float64Operand(i) {
+					return true
+				}
+			}
+			return false
+		default:
+			return float64Operand(operand1) > float64Operand(operand2)
+		}
+	}
 }
 
 func lss(operand1 interface{}, operand2 interface{}) bool {
-	return float64Operand(operand1) < float64Operand(operand2)
+	switch operand1.(type) {
+	case []interface{}:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand1.([]interface{}) {
+				for _, j := range operand2.([]interface{}) {
+					if float64Operand(i) >= float64Operand(j) {
+						return false
+					}
+				}
+			}
+			return true
+		default:
+			for _, i := range operand1.([]interface{}) {
+				if float64Operand(i) < float64Operand(operand2) {
+					return true
+				}
+			}
+			return false
+		}
+	default:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand2.([]interface{}) {
+				if float64Operand(operand1) < float64Operand(i) {
+					return true
+				}
+			}
+			return false
+		default:
+			return float64Operand(operand1) < float64Operand(operand2)
+		}
+	}
 }
 
 func geq(operand1 interface{}, operand2 interface{}) bool {
-	return float64Operand(operand1) >= float64Operand(operand2)
+	switch operand1.(type) {
+	case []interface{}:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand1.([]interface{}) {
+				for _, j := range operand2.([]interface{}) {
+					if float64Operand(i) < float64Operand(j) {
+						return false
+					}
+				}
+			}
+			return true
+		default:
+			for _, i := range operand1.([]interface{}) {
+				if float64Operand(i) >= float64Operand(operand2) {
+					return true
+				}
+			}
+			return false
+		}
+	default:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand2.([]interface{}) {
+				if float64Operand(operand1) >= float64Operand(i) {
+					return true
+				}
+			}
+			return false
+		default:
+			return float64Operand(operand1) >= float64Operand(operand2)
+		}
+	}
 }
 
 func leq(operand1 interface{}, operand2 interface{}) bool {
-	return float64Operand(operand1) <= float64Operand(operand2)
+	switch operand1.(type) {
+	case []interface{}:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand1.([]interface{}) {
+				for _, j := range operand2.([]interface{}) {
+					if float64Operand(i) > float64Operand(j) {
+						return false
+					}
+				}
+			}
+			return true
+		default:
+			for _, i := range operand1.([]interface{}) {
+				if float64Operand(i) <= float64Operand(operand2) {
+					return true
+				}
+			}
+			return false
+		}
+	default:
+		switch operand2.(type) {
+		case []interface{}:
+			for _, i := range operand2.([]interface{}) {
+				if float64Operand(operand1) <= float64Operand(i) {
+					return true
+				}
+			}
+			return false
+		default:
+			return float64Operand(operand1) <= float64Operand(operand2)
+		}
+	}
 }
 
 // Map of comparison operations
@@ -436,8 +605,10 @@ func evalPrimary(pri *Primary, obj interface{}) (v interface{}, newObj interface
 			} else {
 				v = false
 			}
-		} else {
+		} else if len(result) == 1 {
 			v = result[0]
+		} else {
+			v = result
 		}
 
 		// `brand.name.startsWith("Chev")` goes here

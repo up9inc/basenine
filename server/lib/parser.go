@@ -53,14 +53,14 @@ type Primary struct {
 }
 
 type CallExpression struct {
-	Identifier       *string           `@Ident ( @"." @Ident )*`
+	Identifier       *string           `@Ident ( @("." "*" | ".") @Ident? )*`
 	Parameters       []*Parameter      `[ "(" (@@ ("," @@)*)? ")" ]`
 	SelectExpression *SelectExpression `[ @@ ]`
 }
 
 type SelectExpression struct {
 	Index      *int        `[ "[" @Int "]" ]`
-	Key        *string     `[ "[" @(String|Char|RawString) "]" ]`
+	Key        *string     `[ "[" @(String|Char|RawString|"*") "]" ]`
 	Expression *Expression `[ "." @@ ]`
 }
 
