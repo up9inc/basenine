@@ -98,6 +98,8 @@ func (c *Connection) Query(query string, data chan []byte, meta chan []byte) {
 // Single returns a single record from the database server specified by the host:port pair
 // and by given ID.
 func Single(host string, port string, id int, query string) (data []byte, err error) {
+	query = escapeLineFeed(query)
+
 	var c *Connection
 	c, err = NewConnection(host, port)
 	if err != nil {
@@ -122,6 +124,8 @@ func Single(host string, port string, id int, query string) (data []byte, err er
 // Fetch returns limit number of records by querying on either positive(future) or negative(past) direction
 // that starts from leftOff.
 func Fetch(host string, port string, leftOff int, direction int, query string, limit int, timeout time.Duration) (data [][]byte, meta []byte, err error) {
+	query = escapeLineFeed(query)
+
 	var c *Connection
 	c, err = NewConnection(host, port)
 	if err != nil {
