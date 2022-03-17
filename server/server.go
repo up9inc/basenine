@@ -955,6 +955,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	expr, prop, err := prepareQuery(string(data))
 	if err != nil {
 		conn.Close()
+		return
 	}
 	limit := prop.Limit
 	rlimit := prop.Rlimit
@@ -992,7 +993,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 		// Safely access the next part of offsets and partition references.
 		cs.RLock()
 		xLeftOff := leftOff - int64(cs.removedOffsetsCounter)
-		if xLeftOff < 0 {
+		if xLeftOff < 0 || int(xLeftOff) > len(cs.offsets) {
 			xLeftOff = 0
 		}
 		subOffsets := cs.offsets[xLeftOff:]
@@ -1491,9 +1492,20 @@ func rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, 
 	return
 }
 
-// flush removes all the records in the database
+// removeAllWatchers removes all the watchers that are watching the database files.
+func removeAllWatchers() {
+	for _, partition := range cs.partitions {
+		err := watcher.Remove(partition.Name())
+		if err != nil {
+			log.Printf("Watch removal error: %v\n", err.Error())
+		}
+	}
+}
+
+// flush removes all the records in the database.
 func flush() {
 	cs.Lock()
+	removeAllWatchers()
 	cs = ConcurrentSliceV0{
 		version:             cs.version,
 		partitionIndex:      -1,
@@ -1509,9 +1521,10 @@ func flush() {
 }
 
 // reset removes all the records in the database and
-// resets the core's state into its initial form
+// resets the core's state into its initial form.
 func reset() {
 	cs.Lock()
+	removeAllWatchers()
 	cs = ConcurrentSliceV0{
 		version:        VERSION,
 		partitionIndex: -1,

@@ -697,6 +697,11 @@ func TestServerProtocolLimitMode(t *testing.T) {
 }
 
 func TestServerProtocolFlushMode(t *testing.T) {
+	cs.Lock()
+	cs = ConcurrentSliceV0{
+		partitionIndex: -1,
+	}
+
 	server, client := net.Pipe()
 	go handleConnection(server)
 
@@ -708,6 +713,11 @@ func TestServerProtocolFlushMode(t *testing.T) {
 }
 
 func TestServerProtocolResetMode(t *testing.T) {
+	cs.Lock()
+	cs = ConcurrentSliceV0{
+		partitionIndex: -1,
+	}
+
 	server, client := net.Pipe()
 	go handleConnection(server)
 
