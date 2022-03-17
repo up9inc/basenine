@@ -38,6 +38,8 @@ const (
 	CMD_MACRO            string = "/macro"
 	CMD_LIMIT            string = "/limit"
 	CMD_METADATA         string = "/metadata"
+	CMD_FLUSH            string = "/flush"
+	CMD_RESET            string = "/reset"
 )
 
 // Closing indicators
@@ -277,6 +279,57 @@ func Limit(host string, port string, limit int64) (err error) {
 
 	c.SendText(CMD_LIMIT)
 	c.SendText(fmt.Sprintf("%d", limit))
+
+	data := <-ret
+	text := string(data)
+	if text != "OK" {
+		err = errors.New(text)
+	}
+	c.Close()
+	return
+}
+
+// Flush removes all the records in the database.
+func Flush(host string, port string) (err error) {
+	var c *Connection
+	c, err = NewConnection(host, port)
+	if err != nil {
+		return
+	}
+
+	ret := make(chan []byte)
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, c, ret, nil)
+	wg.Add(1)
+
+	c.SendText(CMD_FLUSH)
+
+	data := <-ret
+	text := string(data)
+	if text != "OK" {
+		err = errors.New(text)
+	}
+	c.Close()
+	return
+}
+
+// Reset removes all the records in the database
+// and resets the core into its initial state.
+func Reset(host string, port string) (err error) {
+	var c *Connection
+	c, err = NewConnection(host, port)
+	if err != nil {
+		return
+	}
+
+	ret := make(chan []byte)
+
+	var wg sync.WaitGroup
+	go readConnection(&wg, c, ret, nil)
+	wg.Add(1)
+
+	c.SendText(CMD_RESET)
 
 	data := <-ret
 	text := string(data)

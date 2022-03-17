@@ -64,6 +64,11 @@ starting from a certain offset, supporting both directions.
 The disk usage ranges between `50000000` (50MB) and `100000000` (100MB).
 So the actual effective limit is the half of this value.
 
+- **Flush mode** is a short lasting TCP connection mode that removes all the records in the database.
+
+- **Reset mode** is a short lasting TCP connection mode that removes all the records in the database
+and resets the core into its initial state.
+
 ### Query
 
 Querying achieved through a filter syntax named **Basenine Filter Language (BFL)**. It enables the user to query the traffic logs efficiently and precisely.
@@ -204,6 +209,26 @@ Limit:
 ```go
 // Set the database size limit to 100MB
 err := Limit("localhost", "9099", 100000000)
+if err != nil {
+    // err can only be a connection error
+}
+```
+
+Flush:
+
+```go
+// Remove all the records
+err := Flush("localhost", "9099")
+if err != nil {
+    // err can only be a connection error
+}
+```
+
+Reset:
+
+```go
+// Reset the database into its initial state
+err := Reset("localhost", "9099")
 if err != nil {
     // err can only be a connection error
 }
