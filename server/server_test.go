@@ -696,6 +696,102 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	removeDatabaseFiles()
 }
 
+func TestServerProtocolFlushMode(t *testing.T) {
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_FLUSH)))
+
+	client.Close()
+	server.Close()
+}
+
+func TestServerProtocolResetMode(t *testing.T) {
+	server, client := net.Pipe()
+	go handleConnection(server)
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%s\n", CMD_RESET)))
+
+	client.Close()
+	server.Close()
+}
+
+func TestServerFlush(t *testing.T) {
+	insertionFilter := "model"
+	insertionFilterExpr, _, err := prepareQuery(insertionFilter)
+	assert.Nil(t, err)
+	macros := map[string]string{"foo": "bar"}
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+
+	cs = ConcurrentSliceV0{
+		version:             VERSION,
+		partitionIndex:      -1,
+		macros:              macros,
+		insertionFilter:     insertionFilter,
+		insertionFilterExpr: insertionFilterExpr,
+	}
+
+	f := newPartition()
+	assert.NotNil(t, f)
+
+	insertData([]byte(payload))
+
+	flush()
+
+	assert.Equal(t, cs.version, VERSION)
+	assert.Empty(t, cs.lastOffset)
+	assert.Empty(t, cs.partitionRefs)
+	assert.Empty(t, cs.offsets)
+	assert.Len(t, cs.partitions, 1)
+	assert.Empty(t, cs.partitionIndex)
+	assert.Empty(t, cs.partitionSizeLimit)
+	assert.Empty(t, cs.truncatedTimestamp)
+	assert.Empty(t, cs.removedOffsetsCounter)
+	assert.Empty(t, cs.metaOffsetsLength)
+	assert.Equal(t, cs.macros, macros)
+	assert.Equal(t, cs.insertionFilter, insertionFilter)
+	assert.Equal(t, cs.insertionFilterExpr, insertionFilterExpr)
+}
+
+func TestServerReset(t *testing.T) {
+	insertionFilter := "model"
+	insertionFilterExpr, _, err := prepareQuery(insertionFilter)
+	assert.Nil(t, err)
+	macros := map[string]string{"foo": "bar"}
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+
+	cs = ConcurrentSliceV0{
+		version:             VERSION,
+		partitionIndex:      -1,
+		macros:              macros,
+		insertionFilter:     insertionFilter,
+		insertionFilterExpr: insertionFilterExpr,
+	}
+
+	f := newPartition()
+	assert.NotNil(t, f)
+
+	insertData([]byte(payload))
+
+	reset()
+
+	assert.Equal(t, cs.version, VERSION)
+	assert.Empty(t, cs.lastOffset)
+	assert.Empty(t, cs.partitionRefs)
+	assert.Empty(t, cs.offsets)
+	assert.Len(t, cs.partitions, 1)
+	assert.Empty(t, cs.partitionIndex)
+	assert.Empty(t, cs.partitionSizeLimit)
+	assert.Empty(t, cs.truncatedTimestamp)
+	assert.Empty(t, cs.removedOffsetsCounter)
+	assert.Empty(t, cs.metaOffsetsLength)
+	assert.Empty(t, cs.macros)
+	assert.Empty(t, cs.insertionFilter)
+	assert.Empty(t, cs.insertionFilterExpr)
+}
+
 // handleCommands is used by readConnection to make the server's orders
 // in the client to take effect. Such that the server can hang up
 // the connection.

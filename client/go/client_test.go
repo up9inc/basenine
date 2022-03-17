@@ -157,6 +157,16 @@ func TestFetch(t *testing.T) {
 	}
 }
 
+func TestFlush(t *testing.T) {
+	err := Flush(HOST, PORT)
+	assert.Nil(t, err)
+}
+
+func TestReset(t *testing.T) {
+	err := Reset(HOST, PORT)
+	assert.Nil(t, err)
+}
+
 func TestTCPConnectionLeak(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		err := Validate(HOST, PORT, `brand.name == "Chevrolet"`)

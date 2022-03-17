@@ -68,11 +68,16 @@ type ConnectionMode int
 //
 // VALIDATE is a short lasting TCP connection mode for validating a query against syntax errors.
 //
-// MACRO is short lasting TCP connection mode for setting a macro that will be expanded
+// MACRO is a short lasting TCP connection mode for setting a macro that will be expanded
 // later on for each individual query.
 //
-// LIMIT is short lasting TCP connection mode for setting the maximum database size
+// LIMIT is a short lasting TCP connection mode for setting the maximum database size
 // to limit the disk usage.
+//
+// FLUSH is a short lasting TCP connection mode that removes all the records in the database.
+//
+// RESET is a short lasting TCP connection mode that removes all the records in the database
+// and resets the core into its initial state.
 const (
 	NONE ConnectionMode = iota
 	INSERT
@@ -83,6 +88,8 @@ const (
 	VALIDATE
 	MACRO
 	LIMIT
+	FLUSH
+	RESET
 )
 
 type Commands int
@@ -98,6 +105,8 @@ const (
 	CMD_MACRO            string = "/macro"
 	CMD_LIMIT            string = "/limit"
 	CMD_METADATA         string = "/metadata"
+	CMD_FLUSH            string = "/flush"
+	CMD_RESET            string = "/reset"
 )
 
 // Constants defines the database filename's prefix and file extension.
@@ -607,8 +616,9 @@ func handleConnection(conn net.Conn) {
 		switch mode {
 		case NONE:
 			mode = _mode
-			// partitionIndex -1 means there are not partitions created yet
-			if mode == INSERT {
+			switch mode {
+			case INSERT:
+				// partitionIndex -1 means there are not partitions created yet
 				// Safely access the current partition index
 				cs.RLock()
 				currentPartitionIndex := cs.partitionIndex
@@ -616,6 +626,12 @@ func handleConnection(conn net.Conn) {
 				if currentPartitionIndex == -1 {
 					newPartition()
 				}
+			case FLUSH:
+				flush()
+				sendOK(conn)
+			case RESET:
+				reset()
+				sendOK(conn)
 			}
 		case INSERT:
 			insertData(data)
@@ -643,6 +659,12 @@ func handleConnection(conn net.Conn) {
 			applyMacro(conn, data)
 		case LIMIT:
 			setLimit(conn, data)
+		case FLUSH:
+			flush()
+			sendOK(conn)
+		case RESET:
+			reset()
+			sendOK(conn)
 		}
 	}
 
@@ -695,6 +717,12 @@ func handleMessage(message string, conn net.Conn) (mode ConnectionMode, data []b
 
 		case strings.HasPrefix(message, CMD_LIMIT):
 			mode = LIMIT
+
+		case message == CMD_FLUSH:
+			mode = FLUSH
+
+		case message == CMD_RESET:
+			mode = RESET
 
 		default:
 			conn.Write([]byte("Unrecognized command.\n"))
@@ -792,7 +820,7 @@ func setInsertionFilter(conn net.Conn, data []byte) {
 		cs.insertionFilter = query
 		cs.insertionFilterExpr = insertionFilterExpr
 		cs.Unlock()
-		conn.Write([]byte(fmt.Sprintf("OK\n")))
+		sendOK(conn)
 	} else {
 		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
 	}
@@ -1360,7 +1388,7 @@ func validateQuery(conn net.Conn, data []byte) {
 	_, err = basenine.Parse(query)
 
 	if err == nil {
-		conn.Write([]byte(fmt.Sprintf("OK\n")))
+		sendOK(conn)
 	} else {
 		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
 	}
@@ -1384,7 +1412,7 @@ func applyMacro(conn net.Conn, data []byte) {
 	cs.macros = basenine.AddMacro(cs.macros, macro, expanded)
 	cs.Unlock()
 
-	conn.Write([]byte(fmt.Sprintf("OK\n")))
+	sendOK(conn)
 }
 
 // setLimit sets a limit for the maximum database size.
@@ -1400,7 +1428,7 @@ func setLimit(conn net.Conn, data []byte) {
 	cs.partitionSizeLimit = int64(value) / 2
 	cs.Unlock()
 
-	conn.Write([]byte(fmt.Sprintf("OK\n")))
+	sendOK(conn)
 }
 
 func rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
@@ -1461,4 +1489,41 @@ func rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, 
 	}
 	numberOfWrittenNew = numberOfWritten
 	return
+}
+
+// flush removes all the records in the database
+func flush() {
+	cs.Lock()
+	cs = ConcurrentSliceV0{
+		version:             cs.version,
+		partitionIndex:      -1,
+		macros:              cs.macros,
+		insertionFilter:     cs.insertionFilter,
+		insertionFilterExpr: cs.insertionFilterExpr,
+	}
+	cs.Lock()
+	removeDatabaseFiles()
+	dumpCore(true, true)
+	cs.Unlock()
+	newPartition()
+}
+
+// reset removes all the records in the database and
+// resets the core's state into its initial form
+func reset() {
+	cs.Lock()
+	cs = ConcurrentSliceV0{
+		version:        VERSION,
+		partitionIndex: -1,
+		macros:         make(map[string]string),
+	}
+	cs.Lock()
+	removeDatabaseFiles()
+	dumpCore(true, true)
+	cs.Unlock()
+	newPartition()
+}
+
+func sendOK(conn net.Conn) {
+	conn.Write([]byte(fmt.Sprintf("OK\n")))
 }
