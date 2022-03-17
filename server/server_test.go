@@ -725,6 +725,7 @@ func TestServerFlush(t *testing.T) {
 	macros := map[string]string{"foo": "bar"}
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
+	cs.Lock()
 	cs = ConcurrentSliceV0{
 		version:             VERSION,
 		partitionIndex:      -1,
@@ -762,6 +763,7 @@ func TestServerReset(t *testing.T) {
 	macros := map[string]string{"foo": "bar"}
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
+	cs.Lock()
 	cs = ConcurrentSliceV0{
 		version:             VERSION,
 		partitionIndex:      -1,
