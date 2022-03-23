@@ -83,7 +83,7 @@ Please [see the syntax reference](https://github.com/up9inc/basenine/wiki/BFL-Sy
 
 ### Go
 
-Insert:
+#### Insert
 
 ```go
 // Establish a new connection to a Basenine server at localhost:9099
@@ -104,7 +104,7 @@ c.SendText(`{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`)
 c.Close()
 ```
 
-Single:
+#### Single
 
 ```go
 // Retrieve the record with ID equals to 42 with an empty query
@@ -117,7 +117,7 @@ if err != nil {
 }
 ```
 
-Fetch:
+#### Fetch
 
 ```go
 // Retrieve up to 20 records starting from offset 100, in reverse direction (-1),
@@ -129,7 +129,7 @@ if err != nil {
 }
 ```
 
-Query:
+#### Query
 
 ```go
 // Establish a new connection to a Basenine server at localhost:9099
@@ -142,15 +142,24 @@ if err != nil {
 data := make(chan []byte)
 meta := make(chan []byte)
 
+// Clean up
+defer func() {
+    data <- []byte(CloseChannel)
+    meta <- []byte(CloseChannel)
+    c.Close()
+}()
+
 // Define a function to handle the data stream
 handleDataChannel := func(wg *sync.WaitGroup, c *Connection, data chan []byte) {
     defer wg.Done()
     for {
         bytes := <-data
 
-        // Do something with bytes
+        if string(bytes) == CloseChannel {
+            return
+        }
 
-        c.Close()
+        // Do something with bytes
     }
 }
 
@@ -159,9 +168,11 @@ handleMetaChannel := func(c *Connection, meta chan []byte) {
     for {
         bytes := <-meta
 
-        // Do something with bytes
+        if string(bytes) == CloseChannel {
+            return
+        }
 
-        c.Close()
+        // Do something with bytes
     }
 }
 
@@ -175,7 +186,7 @@ c.Query(`brand.name == "Chevrolet"`, data, meta)
 wg.Wait()
 ```
 
-Validate:
+#### Validate
 
 ```go
 err := Validate("localhost", "9099", `brand.name == "Chevrolet"`)
@@ -184,7 +195,7 @@ if err != nil {
 }
 ```
 
-Macro:
+#### Macro
 
 ```go
 // Define a macro `chevy` expands into `brand.name == "Chevrolet"`
@@ -194,7 +205,7 @@ if err != nil {
 }
 ```
 
-Insertion Filter:
+#### Insertion Filter
 
 ```go
 // Set the insertion filter to `brand.name == "Chevrolet" and redact("year")`
@@ -204,7 +215,7 @@ if err != nil {
 }
 ```
 
-Limit:
+#### Limit
 
 ```go
 // Set the database size limit to 100MB
@@ -214,7 +225,7 @@ if err != nil {
 }
 ```
 
-Flush:
+#### Flush
 
 ```go
 // Remove all the records
@@ -224,7 +235,7 @@ if err != nil {
 }
 ```
 
-Reset:
+#### Reset
 
 ```go
 // Reset the database into its initial state
