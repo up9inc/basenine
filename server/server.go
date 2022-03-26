@@ -143,8 +143,6 @@ var cdl CoreDumpLock
 //
 // removedOffsetsCounter is the counter of how many offsets are removed through size limiting.
 //
-// metaOffsetsLength is the length of offsets by ignoring size limiting for indexing.
-//
 // macros is the map of strings where the key is the macro and value is the expanded form.
 //
 // insertionFilter is the filter that's applied just before the insertion of every individual record.
