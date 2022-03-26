@@ -160,8 +160,7 @@ type ConcurrentSliceV0 struct {
 	partitionIndex        int64
 	partitionSizeLimit    int64
 	truncatedTimestamp    int64
-	removedOffsetsCounter uint64
-	metaOffsetsLength     uint64
+	removedOffsetsCounter int
 	macros                map[string]string
 	insertionFilter       string
 	insertionFilterExpr   *basenine.Expression
@@ -177,8 +176,7 @@ type ConcurrentSliceV0Export struct {
 	PartitionIndex        int64
 	PartitionSizeLimit    int64
 	TruncatedTimestamp    int64
-	RemovedOffsetsCounter uint64
-	MetaOffsetsLength     uint64
+	RemovedOffsetsCounter int
 	Macros                map[string]string
 	InsertionFilter       string
 }
@@ -355,7 +353,6 @@ func dumpCore(silent bool, dontLock bool) (err error) {
 	csExport.PartitionSizeLimit = cs.partitionSizeLimit
 	csExport.TruncatedTimestamp = cs.truncatedTimestamp
 	csExport.RemovedOffsetsCounter = cs.removedOffsetsCounter
-	csExport.MetaOffsetsLength = cs.metaOffsetsLength
 	csExport.Macros = cs.macros
 	csExport.InsertionFilter = cs.insertionFilter
 	if !dontLock {
@@ -421,7 +418,6 @@ func restoreCore() (err error) {
 	cs.partitionSizeLimit = csExport.PartitionSizeLimit
 	cs.truncatedTimestamp = csExport.TruncatedTimestamp
 	cs.removedOffsetsCounter = csExport.RemovedOffsetsCounter
-	cs.metaOffsetsLength = csExport.MetaOffsetsLength
 	cs.macros = csExport.Macros
 	cs.insertionFilter = csExport.InsertionFilter
 	cs.insertionFilterExpr, _, _ = prepareQuery(cs.insertionFilter)
@@ -456,23 +452,23 @@ func getLastTimestampOfPartition(discardedPartitionIndex int64) (timestamp int64
 	partitionRefs := cs.partitionRefs
 	cs.RUnlock()
 
-	var removedOffsetsCounter uint64
+	var prevIndex int
+	var removedOffsetsCounter int
 	for i := range offsets {
 		if partitionRefs[i] > discardedPartitionIndex {
 			break
 		}
+		prevIndex = i
 		removedOffsetsCounter++
 	}
 
 	cs.Lock()
-	cs.offsets = cs.offsets[removedOffsetsCounter:]
-	cs.partitionRefs = cs.partitionRefs[removedOffsetsCounter:]
-	cs.removedOffsetsCounter += removedOffsetsCounter
+	cs.removedOffsetsCounter = removedOffsetsCounter
 	cs.Unlock()
 
 	var n int64
 	var f *os.File
-	n, f, err = getOffsetAndPartition(0)
+	n, f, err = getOffsetAndPartition(prevIndex)
 
 	if err != nil {
 		return
@@ -770,7 +766,7 @@ func insertData(data []byte) {
 	var lastOffset int64
 	// Safely access the last offset and current partition.
 	cs.Lock()
-	l := cs.metaOffsetsLength
+	l := len(cs.offsets)
 	lastOffset = cs.lastOffset
 	f := cs.partitions[cs.partitionIndex]
 
@@ -789,7 +785,6 @@ func insertData(data []byte) {
 	cs.offsets = append(cs.offsets, lastOffset)
 	cs.partitionRefs = append(cs.partitionRefs, cs.partitionIndex)
 	cs.lastOffset = lastOffset + 8 + length
-	cs.metaOffsetsLength++
 
 	// Release the lock
 	cs.Unlock()
@@ -935,7 +930,7 @@ func handleNegativeLeftOff(leftOff int64) int64 {
 	// If leftOff value is -1 then set it to last offset
 	if leftOff < 0 {
 		cs.RLock()
-		lastOffset := cs.metaOffsetsLength - 1
+		lastOffset := len(cs.offsets) - 1
 		cs.RUnlock()
 		leftOff = int64(lastOffset)
 		if leftOff < 0 {
@@ -977,6 +972,9 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	// Number of queried records
 	var queried uint64 = 0
 
+	// removedCounter keeps track of how many offsets belong to a removed partition.
+	var removedOffsetsCounter int
+
 	for {
 		// f is the current partition we're reading the data from.
 		var f *os.File
@@ -992,10 +990,11 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 
 		// Safely access the next part of offsets and partition references.
 		cs.RLock()
-		subOffsets := cs.offsets[leftOff-int64(cs.removedOffsetsCounter):]
-		subPartitionRefs := cs.partitionRefs[leftOff-int64(cs.removedOffsetsCounter):]
-		totalNumberOfRecords := cs.metaOffsetsLength - cs.removedOffsetsCounter
+		subOffsets := cs.offsets[leftOff:]
+		subPartitionRefs := cs.partitionRefs[leftOff:]
+		totalNumberOfRecords := len(cs.offsets)
 		truncatedTimestamp := cs.truncatedTimestamp
+		removedOffsetsCounter = cs.removedOffsetsCounter
 		cs.RUnlock()
 
 		// Disable rlimit if it's bigger than the total records.
@@ -1015,7 +1014,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 			cs.RLock()
 			partitionRef = subPartitionRefs[i]
 			fRef := cs.partitions[partitionRef]
-			totalNumberOfRecords = cs.metaOffsetsLength
+			totalNumberOfRecords = len(cs.offsets)
 			truncatedTimestamp = cs.truncatedTimestamp
 			cs.RUnlock()
 
@@ -1073,10 +1072,13 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				}
 			}
 
+			// Correct the metadata values by subtracting removedOffsetsCounter
+			realTotal := totalNumberOfRecords - removedOffsetsCounter
+
 			metadata = &Metadata{
 				NumberOfWritten:    numberOfWritten,
 				Current:            uint64(queried),
-				Total:              totalNumberOfRecords,
+				Total:              uint64(realTotal),
 				LeftOff:            uint64(leftOff),
 				TruncatedTimestamp: truncatedTimestamp,
 			}
@@ -1133,22 +1135,17 @@ func retrieveSingle(conn net.Conn, args []string) (err error) {
 
 	// Safely access the length of offsets slice.
 	cs.RLock()
-	l := cs.metaOffsetsLength
-	removedOffsetsCounter := cs.removedOffsetsCounter
+	l := len(cs.offsets)
 	cs.RUnlock()
 
 	// Check if the index is in the offsets slice.
-	if uint64(index) > l {
+	if index > l {
 		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", index)))
 		return
 	}
 
 	// Safely acces the offsets and partition references
-	xLeftOff := index - int(removedOffsetsCounter)
-	if xLeftOff < 0 {
-		xLeftOff = 0
-	}
-	n, f, err := getOffsetAndPartition(xLeftOff)
+	n, f, err := getOffsetAndPartition(index)
 
 	// Record can only be removed if the partition of the record
 	// that it belongs to is removed. Therefore a file open error
@@ -1213,11 +1210,11 @@ func fetch(conn net.Conn, args []string) {
 
 	// Safely access the length of offsets slice.
 	cs.RLock()
-	l := cs.metaOffsetsLength
+	l := len(cs.offsets)
 	cs.RUnlock()
 
 	// Check if the leftOff is in the offsets slice.
-	if uint64(leftOff) > l {
+	if int(leftOff) > l {
 		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", leftOff)))
 		return
 	}
@@ -1246,18 +1243,20 @@ func fetch(conn net.Conn, args []string) {
 	// Safely access the next part of offsets and partition references.
 	var subOffsets []int64
 	var subPartitionRefs []int64
-	var totalNumberOfRecords uint64
+	var totalNumberOfRecords int
 	var truncatedTimestamp int64
+	var removedOffsetsCounter int
 	cs.RLock()
-	totalNumberOfRecords = cs.metaOffsetsLength
+	totalNumberOfRecords = len(cs.offsets)
 	truncatedTimestamp = cs.truncatedTimestamp
 	if direction < 0 {
-		subOffsets = cs.offsets[:leftOff-int64(cs.removedOffsetsCounter)]
-		subPartitionRefs = cs.partitionRefs[:leftOff-int64(cs.removedOffsetsCounter)]
+		subOffsets = cs.offsets[:leftOff]
+		subPartitionRefs = cs.partitionRefs[:leftOff]
 	} else {
-		subOffsets = cs.offsets[leftOff-int64(cs.removedOffsetsCounter):]
-		subPartitionRefs = cs.partitionRefs[leftOff-int64(cs.removedOffsetsCounter):]
+		subOffsets = cs.offsets[leftOff:]
+		subPartitionRefs = cs.partitionRefs[leftOff:]
 	}
+	removedOffsetsCounter = cs.removedOffsetsCounter
 	cs.RUnlock()
 
 	var metadata []byte
@@ -1268,7 +1267,7 @@ func fetch(conn net.Conn, args []string) {
 	metadata, _ = json.Marshal(Metadata{
 		NumberOfWritten:    numberOfWritten,
 		Current:            uint64(queried),
-		Total:              totalNumberOfRecords,
+		Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
 		LeftOff:            uint64(leftOff),
 		TruncatedTimestamp: truncatedTimestamp,
 	})
@@ -1345,7 +1344,7 @@ func fetch(conn net.Conn, args []string) {
 		metadata, _ = json.Marshal(Metadata{
 			NumberOfWritten:    numberOfWritten,
 			Current:            uint64(queried),
-			Total:              uint64(totalNumberOfRecords),
+			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
 			LeftOff:            uint64(leftOff),
 			TruncatedTimestamp: truncatedTimestamp,
 		})
