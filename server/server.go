@@ -769,7 +769,7 @@ func insertData(data []byte) {
 	f := cs.partitions[cs.partitionIndex]
 
 	// Set "id" field to the index of the record.
-	d["id"] = l
+	d["id"] = fmt.Sprintf("%024d", l)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
