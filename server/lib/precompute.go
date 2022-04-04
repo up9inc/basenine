@@ -31,7 +31,7 @@ type Propagate struct {
 	Path    string
 	Limit   uint64
 	Rlimit  uint64
-	LeftOff int64
+	LeftOff string
 }
 
 // strContains checks if a string is present in a slice
@@ -56,7 +56,7 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 	if xProp.Rlimit == 0 {
 		xProp.Rlimit = yProp.Rlimit
 	}
-	if xProp.LeftOff == 0 {
+	if xProp.LeftOff == "" {
 		xProp.LeftOff = yProp.LeftOff
 	}
 
@@ -160,7 +160,7 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelperP
 					case "limit":
 						prop.Limit = uint64(float64Operand(v))
 					case "leftOff":
-						prop.LeftOff = int64(float64Operand(v))
+						prop.LeftOff = stringOperand(v)
 					case "seconds":
 						then := now.Add(time.Duration(int64(float64Operand(v))) * time.Second)
 						call.Parameters = []*Parameter{{TimeSet: true, Time: then}}

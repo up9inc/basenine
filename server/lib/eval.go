@@ -21,6 +21,7 @@ import (
 )
 
 const REDACTED = "[REDACTED]"
+const LATEST = "latest"
 
 // bool operand evaluator. Boolean literals falls into this method.
 func boolOperand(operand interface{}) bool {
