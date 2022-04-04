@@ -3,6 +3,7 @@ package basenine
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -144,6 +145,10 @@ func TestQuery(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping testing in CI environment")
+	}
+
 	data, meta, err := Fetch(HOST, PORT, fmt.Sprintf("%024d", 100), -1, `chevy`, 20, 20*time.Second)
 	assert.Nil(t, err)
 
