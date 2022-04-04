@@ -1498,6 +1498,9 @@ func rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, 
 // removeAllWatchers removes all the watchers that are watching the database files.
 func removeAllWatchers() {
 	for _, partition := range cs.partitions {
+		if partition == nil {
+			continue
+		}
 		err := watcher.Remove(partition.Name())
 		if err != nil {
 			log.Printf("Watch removal error: %v\n", err.Error())
@@ -1509,14 +1512,14 @@ func removeAllWatchers() {
 func flush() {
 	cs.Lock()
 	removeAllWatchers()
-	cs = ConcurrentSliceV0{
-		version:             cs.version,
-		partitionIndex:      -1,
-		macros:              cs.macros,
-		insertionFilter:     cs.insertionFilter,
-		insertionFilterExpr: cs.insertionFilterExpr,
-	}
-	cs.Lock()
+	cs.lastOffset = 0
+	cs.partitionRefs = []int64{}
+	cs.offsets = []int64{}
+	cs.partitions = []*os.File{}
+	cs.partitionIndex = -1
+	cs.partitionSizeLimit = 0
+	cs.truncatedTimestamp = 0
+	cs.removedOffsetsCounter = 0
 	removeDatabaseFiles()
 	dumpCore(true, true)
 	cs.Unlock()
@@ -1528,12 +1531,18 @@ func flush() {
 func reset() {
 	cs.Lock()
 	removeAllWatchers()
-	cs = ConcurrentSliceV0{
-		version:        VERSION,
-		partitionIndex: -1,
-		macros:         make(map[string]string),
-	}
-	cs.Lock()
+	cs.version = VERSION
+	cs.macros = make(map[string]string)
+	cs.insertionFilter = ""
+	cs.insertionFilterExpr = nil
+	cs.lastOffset = 0
+	cs.partitionRefs = []int64{}
+	cs.offsets = []int64{}
+	cs.partitions = []*os.File{}
+	cs.partitionIndex = -1
+	cs.partitionSizeLimit = 0
+	cs.truncatedTimestamp = 0
+	cs.removedOffsetsCounter = 0
 	removeDatabaseFiles()
 	dumpCore(true, true)
 	cs.Unlock()
