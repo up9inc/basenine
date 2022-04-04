@@ -191,7 +191,7 @@ type Metadata struct {
 	Current            uint64 `json:"current"`
 	Total              uint64 `json:"total"`
 	NumberOfWritten    uint64 `json:"numberOfWritten"`
-	LeftOff            uint64 `json:"leftOff"`
+	LeftOff            string `json:"leftOff"`
 	TruncatedTimestamp int64  `json:"truncatedTimestamp"`
 }
 
@@ -735,6 +735,10 @@ func check(e error) {
 	}
 }
 
+func indexToID(index int) string {
+	return fmt.Sprintf("%024d", index)
+}
+
 // insertData inserts a record into database.
 // It unmarshals the given bytes into a map[string]interface{}
 // Then inserts a key named "id" to that map. Which indicates the
@@ -769,7 +773,7 @@ func insertData(data []byte) {
 	f := cs.partitions[cs.partitionIndex]
 
 	// Set "id" field to the index of the record.
-	d["id"] = fmt.Sprintf("%024d", l)
+	d["id"] = indexToID(l)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -924,9 +928,9 @@ func prepareQuery(query string) (expr *basenine.Expression, prop basenine.Propag
 }
 
 // handleNegativeLeftOff handles negative leftOff value.
-func handleNegativeLeftOff(leftOff int64) int64 {
+func handleNegativeLeftOff(_leftOff string) (leftOff int64, err error) {
 	// If leftOff value is -1 then set it to last offset
-	if leftOff < 0 {
+	if _leftOff == basenine.LATEST {
 		cs.RLock()
 		lastOffset := len(cs.offsets) - 1
 		cs.RUnlock()
@@ -934,9 +938,13 @@ func handleNegativeLeftOff(leftOff int64) int64 {
 		if leftOff < 0 {
 			leftOff = 0
 		}
+	} else {
+		var leftOffInt int
+		leftOffInt, err = strconv.Atoi(_leftOff)
+		leftOff = int64(leftOffInt)
 	}
 
-	return leftOff
+	return
 }
 
 // streamRecords is an infinite loop that only called in case of QUERY TCP connection mode.
@@ -952,9 +960,12 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 	}
 	limit := prop.Limit
 	rlimit := prop.Rlimit
-	leftOff := prop.LeftOff
+	_leftOff := prop.LeftOff
 
-	leftOff = handleNegativeLeftOff(leftOff)
+	leftOff, err := handleNegativeLeftOff(_leftOff)
+	if err != nil {
+		return
+	}
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
@@ -1077,7 +1088,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				NumberOfWritten:    numberOfWritten,
 				Current:            uint64(queried),
 				Total:              uint64(realTotal),
-				LeftOff:            uint64(leftOff),
+				LeftOff:            indexToID(int(leftOff)),
 				TruncatedTimestamp: truncatedTimestamp,
 			}
 			queried = 0
@@ -1186,11 +1197,17 @@ func ReverseSlice(arr []int64) (newArr []int64) {
 // fetch defines a macro that will be expanded for each individual query.
 func fetch(conn net.Conn, args []string) {
 	// Parse the arguments
-	_leftOff, err := strconv.Atoi(args[0])
+	_leftOff := args[0]
+	leftOff, err := handleNegativeLeftOff(_leftOff)
 	if err != nil {
-		conn.Write([]byte(fmt.Sprintf("Error: While converting the index to integer: %s\n", err.Error())))
+		conn.Write([]byte(fmt.Sprintf("Error: Cannot parse leftOff value to int: %s\n", err.Error())))
 		return
 	}
+
+	if leftOff > 0 {
+		leftOff--
+	}
+
 	direction, err := strconv.Atoi(args[1])
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the direction to integer: %s\n", err.Error())))
@@ -1202,9 +1219,6 @@ func fetch(conn net.Conn, args []string) {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the limit to integer: %s\n", err.Error())))
 		return
 	}
-
-	leftOff := int64(_leftOff)
-	leftOff = handleNegativeLeftOff(leftOff)
 
 	// Safely access the length of offsets slice.
 	cs.RLock()
@@ -1266,7 +1280,7 @@ func fetch(conn net.Conn, args []string) {
 		NumberOfWritten:    numberOfWritten,
 		Current:            uint64(queried),
 		Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
-		LeftOff:            uint64(leftOff),
+		LeftOff:            indexToID(int(leftOff)),
 		TruncatedTimestamp: truncatedTimestamp,
 	})
 
@@ -1343,7 +1357,7 @@ func fetch(conn net.Conn, args []string) {
 			NumberOfWritten:    numberOfWritten,
 			Current:            uint64(queried),
 			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
-			LeftOff:            uint64(leftOff),
+			LeftOff:            indexToID(int(leftOff)),
 			TruncatedTimestamp: truncatedTimestamp,
 		})
 
