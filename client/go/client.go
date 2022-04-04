@@ -23,7 +23,7 @@ type Metadata struct {
 	Current            uint64 `json:"current"`
 	Total              uint64 `json:"total"`
 	NumberOfWritten    uint64 `json:"numberOfWritten"`
-	LeftOff            uint64 `json:"leftOff"`
+	LeftOff            string `json:"leftOff"`
 	TruncatedTimestamp int64  `json:"truncatedTimestamp"`
 }
 
@@ -99,7 +99,7 @@ func (c *Connection) Query(query string, data chan []byte, meta chan []byte) {
 
 // Single returns a single record from the database server specified by the host:port pair
 // and by given ID.
-func Single(host string, port string, id int, query string) (data []byte, err error) {
+func Single(host string, port string, id string, query string) (data []byte, err error) {
 	query = escapeLineFeed(query)
 
 	var c *Connection
@@ -115,7 +115,7 @@ func Single(host string, port string, id int, query string) (data []byte, err er
 	wg.Add(1)
 
 	c.SendText(CMD_SINGLE)
-	c.SendText(fmt.Sprintf("%d", id))
+	c.SendText(fmt.Sprintf("%s", id))
 	c.SendText(query)
 
 	data = <-ret
@@ -125,7 +125,7 @@ func Single(host string, port string, id int, query string) (data []byte, err er
 
 // Fetch returns limit number of records by querying on either positive(future) or negative(past) direction
 // that starts from leftOff.
-func Fetch(host string, port string, leftOff int, direction int, query string, limit int, timeout time.Duration) (data [][]byte, meta []byte, err error) {
+func Fetch(host string, port string, leftOff string, direction int, query string, limit int, timeout time.Duration) (data [][]byte, meta []byte, err error) {
 	query = escapeLineFeed(query)
 
 	var c *Connection
@@ -142,7 +142,7 @@ func Fetch(host string, port string, leftOff int, direction int, query string, l
 	wg.Add(1)
 
 	c.SendText(CMD_FETCH)
-	c.SendText(fmt.Sprintf("%d", leftOff))
+	c.SendText(fmt.Sprintf("%s", leftOff))
 	c.SendText(fmt.Sprintf("%d", direction))
 	c.SendText(fmt.Sprintf("%s", query))
 	c.SendText(fmt.Sprintf("%d", limit))

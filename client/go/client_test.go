@@ -60,11 +60,11 @@ func TestInsert(t *testing.T) {
 }
 
 func TestSingle(t *testing.T) {
-	id := 42
+	id := fmt.Sprintf("%024d", 42)
 	data, err := Single(HOST, PORT, id, "")
 	assert.Nil(t, err)
 
-	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":"%s"}`, id, REDACTED)
+	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":"%s"}`, id, REDACTED)
 	assert.JSONEq(t, expected, string(data))
 }
 
@@ -144,14 +144,14 @@ func TestQuery(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
-	data, meta, err := Fetch(HOST, PORT, 100, -1, `chevy`, 20, 20*time.Second)
+	data, meta, err := Fetch(HOST, PORT, fmt.Sprintf("%024d", 100), -1, `chevy`, 20, 20*time.Second)
 	assert.Nil(t, err)
 
-	assert.Equal(t, `{"current":20,"total":15000,"numberOfWritten":19,"leftOff":80,"truncatedTimestamp":0}`, string(meta))
+	assert.Equal(t, fmt.Sprintf(`{"current":20,"total":15000,"numberOfWritten":19,"leftOff":"%s","truncatedTimestamp":0}`, fmt.Sprintf("%024d", 79)), string(meta))
 
 	i := 0
 	for id := 99; id > 80; id-- {
-		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":"%s"}`, id, REDACTED)
+		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":"%s"}`, fmt.Sprintf("%024d", id-1), REDACTED)
 		assert.JSONEq(t, expected, string(data[i]))
 		i++
 	}

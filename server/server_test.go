@@ -77,7 +77,7 @@ func TestServerInsertAndReadData(t *testing.T) {
 	assert.NotNil(t, f)
 
 	for index := 0; index < 100; index++ {
-		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 
 		insertData([]byte(payload))
 
@@ -128,7 +128,7 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	index := 0
-	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 
 	// Safely acces the offsets and partition references
 	n, rf, err := getOffsetAndPartition(index)
@@ -200,7 +200,7 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 					break
 				}
 
-				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":"%s"}`, index, basenine.REDACTED)
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":"%s"}`, basenine.IndexToID(index), basenine.REDACTED)
 				index++
 				assert.JSONEq(t, expected, string(bytes))
 
@@ -283,7 +283,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 						break
 					}
 
-					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 					index++
 					assert.JSONEq(t, expected, string(bytes))
 
@@ -350,7 +350,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 					break
 				}
 
-				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, id)
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(id))
 				assert.JSONEq(t, expected, string(bytes))
 
 				assert.True(t, ok)
@@ -495,7 +495,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 					break
 				}
 
-				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
+				expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 				index++
 				assert.JSONEq(t, expected, string(bytes))
 
@@ -585,12 +585,17 @@ func TestServerProtocolFetchMode(t *testing.T) {
 						break
 					}
 
-					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":%d,"model":"Camaro","year":2021}`, index)
 					if row.direction < 0 {
 						index--
 					} else {
 						index++
 					}
+
+					if index >= total || index < 0 {
+						return
+					}
+
+					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 					assert.JSONEq(t, expected, string(bytes))
 
 					counter++
