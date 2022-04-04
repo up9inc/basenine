@@ -735,10 +735,6 @@ func check(e error) {
 	}
 }
 
-func indexToID(index int) string {
-	return fmt.Sprintf("%024d", index)
-}
-
 // insertData inserts a record into database.
 // It unmarshals the given bytes into a map[string]interface{}
 // Then inserts a key named "id" to that map. Which indicates the
@@ -773,7 +769,7 @@ func insertData(data []byte) {
 	f := cs.partitions[cs.partitionIndex]
 
 	// Set "id" field to the index of the record.
-	d["id"] = indexToID(l)
+	d["id"] = basenine.IndexToID(l)
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
@@ -938,7 +934,7 @@ func handleNegativeLeftOff(_leftOff string) (leftOff int64, err error) {
 		if leftOff < 0 {
 			leftOff = 0
 		}
-	} else {
+	} else if _leftOff != "" {
 		var leftOffInt int
 		leftOffInt, err = strconv.Atoi(_leftOff)
 		leftOff = int64(leftOffInt)
@@ -1088,7 +1084,7 @@ func streamRecords(conn net.Conn, data []byte) (err error) {
 				NumberOfWritten:    numberOfWritten,
 				Current:            uint64(queried),
 				Total:              uint64(realTotal),
-				LeftOff:            indexToID(int(leftOff)),
+				LeftOff:            basenine.IndexToID(int(leftOff)),
 				TruncatedTimestamp: truncatedTimestamp,
 			}
 			queried = 0
@@ -1204,10 +1200,6 @@ func fetch(conn net.Conn, args []string) {
 		return
 	}
 
-	if leftOff > 0 {
-		leftOff--
-	}
-
 	direction, err := strconv.Atoi(args[1])
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the direction to integer: %s\n", err.Error())))
@@ -1218,6 +1210,14 @@ func fetch(conn net.Conn, args []string) {
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the limit to integer: %s\n", err.Error())))
 		return
+	}
+
+	if direction < 0 {
+		if leftOff > 0 {
+			leftOff--
+		}
+	} else {
+		leftOff++
 	}
 
 	// Safely access the length of offsets slice.
@@ -1280,7 +1280,7 @@ func fetch(conn net.Conn, args []string) {
 		NumberOfWritten:    numberOfWritten,
 		Current:            uint64(queried),
 		Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
-		LeftOff:            indexToID(int(leftOff)),
+		LeftOff:            basenine.IndexToID(int(leftOff)),
 		TruncatedTimestamp: truncatedTimestamp,
 	})
 
@@ -1357,7 +1357,7 @@ func fetch(conn net.Conn, args []string) {
 			NumberOfWritten:    numberOfWritten,
 			Current:            uint64(queried),
 			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
-			LeftOff:            indexToID(int(leftOff)),
+			LeftOff:            basenine.IndexToID(int(leftOff)),
 			TruncatedTimestamp: truncatedTimestamp,
 		})
 
