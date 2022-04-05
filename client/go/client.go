@@ -67,19 +67,25 @@ func NewConnection(host string, port string) (connection *Connection, err error)
 }
 
 // Send sends given []byte to the server which the connection is established to.
-func (c *Connection) Send(data []byte) {
-	c.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	c.Write(data)
+func (c *Connection) Send(data []byte) (err error) {
+	err = c.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	if err != nil {
+		return
+	}
+	_, err = c.Write(data)
+	return
 }
 
 // SendText is the wrapper around Send method that allows user to send text directly.
-func (c *Connection) SendText(text string) {
-	c.Send([]byte(fmt.Sprintf("%s\n", text)))
+func (c *Connection) SendText(text string) (err error) {
+	err = c.Send([]byte(fmt.Sprintf("%s\n", text)))
+	return
 }
 
 // InsertMode turns the connection's mode into INSERT mode
-func (c *Connection) InsertMode() {
-	c.SendText(CMD_INSERT)
+func (c *Connection) InsertMode() (err error) {
+	err = c.SendText(CMD_INSERT)
+	return
 }
 
 // Query is the method that user should use to stream the records from the database.
