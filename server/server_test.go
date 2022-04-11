@@ -746,6 +746,7 @@ func TestServerFlush(t *testing.T) {
 
 	flush()
 
+	cs.RLock()
 	assert.Equal(t, cs.version, VERSION)
 	assert.Empty(t, cs.lastOffset)
 	assert.Empty(t, cs.partitionRefs)
@@ -758,6 +759,7 @@ func TestServerFlush(t *testing.T) {
 	assert.Equal(t, cs.macros, macros)
 	assert.Equal(t, cs.insertionFilter, insertionFilter)
 	assert.Equal(t, cs.insertionFilterExpr, insertionFilterExpr)
+	cs.RUnlock()
 }
 
 func TestServerReset(t *testing.T) {
@@ -783,6 +785,7 @@ func TestServerReset(t *testing.T) {
 
 	reset()
 
+	cs.RLock()
 	assert.Equal(t, cs.version, VERSION)
 	assert.Empty(t, cs.lastOffset)
 	assert.Empty(t, cs.partitionRefs)
@@ -795,6 +798,7 @@ func TestServerReset(t *testing.T) {
 	assert.Empty(t, cs.macros)
 	assert.Empty(t, cs.insertionFilter)
 	assert.Empty(t, cs.insertionFilterExpr)
+	cs.RUnlock()
 }
 
 // handleCommands is used by readConnection to make the server's orders
