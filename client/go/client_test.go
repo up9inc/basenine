@@ -54,9 +54,11 @@ func TestInsert(t *testing.T) {
 	c, err := NewConnection(HOST, PORT)
 	assert.Nil(t, err)
 
-	c.InsertMode()
+	err = c.InsertMode()
+	assert.Nil(t, err)
 	for index := 0; index < 15000; index++ {
-		c.SendText(payload)
+		err = c.SendText(payload)
+		assert.Nil(t, err)
 	}
 }
 
@@ -137,7 +139,8 @@ func TestQuery(t *testing.T) {
 	go handleMetaChannel(c, meta)
 	wg.Add(1)
 
-	c.Query(`chevy`, data, meta)
+	err = c.Query(`chevy`, data, meta)
+	assert.Nil(t, err)
 
 	if waitTimeout(&wg, 20*time.Second) {
 		t.Fatal("Timed out waiting for wait group")

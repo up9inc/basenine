@@ -92,15 +92,25 @@ func (c *Connection) InsertMode() (err error) {
 // It takes the filtering language (query) as the first parameter and
 // a []byte channel which the records will be streamed into as the second parameter.
 // Third parameter is the channel for streaming metadata, progress of the query.
-func (c *Connection) Query(query string, data chan []byte, meta chan []byte) {
+func (c *Connection) Query(query string, data chan []byte, meta chan []byte) (err error) {
 	query = escapeLineFeed(query)
 
 	var wg sync.WaitGroup
 	go readConnection(&wg, c, data, meta)
 	wg.Add(1)
 
-	c.SendText(CMD_QUERY)
-	c.SendText(query)
+	err = c.SendText(CMD_QUERY)
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(query)
+	if err != nil {
+		c.Close()
+	}
+
+	return
 }
 
 // Single returns a single record from the database server specified by the host:port pair
@@ -120,9 +130,23 @@ func Single(host string, port string, id string, query string) (data []byte, err
 	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText(CMD_SINGLE)
-	c.SendText(fmt.Sprintf("%s", id))
-	c.SendText(query)
+	err = c.SendText(CMD_SINGLE)
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%s", id))
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(query)
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	data = <-ret
 	c.Close()
@@ -147,11 +171,35 @@ func Fetch(host string, port string, leftOff string, direction int, query string
 	go readConnection(&wg, c, dataChan, metaChan)
 	wg.Add(1)
 
-	c.SendText(CMD_FETCH)
-	c.SendText(fmt.Sprintf("%s", leftOff))
-	c.SendText(fmt.Sprintf("%d", direction))
-	c.SendText(fmt.Sprintf("%s", query))
-	c.SendText(fmt.Sprintf("%d", limit))
+	err = c.SendText(CMD_FETCH)
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%s", leftOff))
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%d", direction))
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%s", query))
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%d", limit))
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	afterCh := time.After(timeout)
 	counter := 0
@@ -199,8 +247,17 @@ func Validate(host string, port string, query string) (err error) {
 	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText(CMD_VALIDATE)
-	c.SendText(fmt.Sprintf("%s", query))
+	err = c.SendText(CMD_VALIDATE)
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%s", query))
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	data := <-ret
 	text := string(data)
@@ -226,8 +283,17 @@ func Macro(host string, port string, macro string, expanded string) (err error) 
 	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText(CMD_MACRO)
-	c.SendText(fmt.Sprintf("%s~%s", macro, expanded))
+	err = c.SendText(CMD_MACRO)
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%s~%s", macro, expanded))
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	data := <-ret
 	text := string(data)
@@ -255,8 +321,17 @@ func InsertionFilter(host string, port string, query string) (err error) {
 	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText(CMD_INSERTION_FILTER)
-	c.SendText(fmt.Sprintf("%s", query))
+	err = c.SendText(CMD_INSERTION_FILTER)
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%s", query))
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	data := <-ret
 	text := string(data)
@@ -283,8 +358,17 @@ func Limit(host string, port string, limit int64) (err error) {
 	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText(CMD_LIMIT)
-	c.SendText(fmt.Sprintf("%d", limit))
+	err = c.SendText(CMD_LIMIT)
+	if err != nil {
+		c.Close()
+		return
+	}
+
+	err = c.SendText(fmt.Sprintf("%d", limit))
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	data := <-ret
 	text := string(data)
@@ -309,7 +393,11 @@ func Flush(host string, port string) (err error) {
 	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText(CMD_FLUSH)
+	err = c.SendText(CMD_FLUSH)
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	data := <-ret
 	text := string(data)
@@ -335,7 +423,11 @@ func Reset(host string, port string) (err error) {
 	go readConnection(&wg, c, ret, nil)
 	wg.Add(1)
 
-	c.SendText(CMD_RESET)
+	err = c.SendText(CMD_RESET)
+	if err != nil {
+		c.Close()
+		return
+	}
 
 	data := <-ret
 	text := string(data)
