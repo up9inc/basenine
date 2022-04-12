@@ -355,13 +355,6 @@ func limit(args ...interface{}) (interface{}, interface{}) {
 	return args[0], true
 }
 
-func rlimit(args ...interface{}) (interface{}, interface{}) {
-	// Returns true no matter what. Evaluated on compile-time,
-	// limits the number of records returned as a result of the query in reverse
-	// but in a weird way such that it limits the past.
-	return args[0], true
-}
-
 func leftOff(args ...interface{}) (interface{}, interface{}) {
 	// Returns true no matter what. Evaluated on compile-time,
 	// starts the query from given index.
@@ -543,7 +536,6 @@ var helpers = map[string]interface{}{
 	"contains":   contains,
 	"datetime":   datetime,
 	"limit":      limit,
-	"rlimit":     rlimit,
 	"leftOff":    leftOff,
 	"json":       _json,
 	"xml":        xml,

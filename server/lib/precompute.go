@@ -15,7 +15,6 @@ import (
 
 var compileTimeEvaluatedHelpers = []string{
 	"limit",
-	"rlimit",
 	"leftOff",
 	"now",
 	"seconds",
@@ -30,7 +29,6 @@ var compileTimeEvaluatedHelpers = []string{
 type Propagate struct {
 	Path    string
 	Limit   uint64
-	Rlimit  uint64
 	LeftOff string
 }
 
@@ -52,9 +50,6 @@ func backpropagate(xProp Propagate, yProp Propagate) (prop Propagate) {
 	}
 	if xProp.Limit == 0 {
 		xProp.Limit = yProp.Limit
-	}
-	if xProp.Rlimit == 0 {
-		xProp.Rlimit = yProp.Rlimit
 	}
 	if xProp.LeftOff == "" {
 		xProp.LeftOff = yProp.LeftOff
@@ -117,7 +112,6 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelperP
 				}
 				_prop, err = computeExpression(call.SelectExpression.Expression, propPath, jsonHelperPath)
 				prop.Limit = _prop.Limit
-				prop.Rlimit = _prop.Rlimit
 				prop.LeftOff = _prop.LeftOff
 				return
 			}
@@ -155,8 +149,6 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelperP
 				now := time.Now()
 				if err == nil {
 					switch *helper {
-					case "rlimit":
-						prop.Rlimit = uint64(float64Operand(v))
 					case "limit":
 						prop.Limit = uint64(float64Operand(v))
 					case "leftOff":
@@ -188,7 +180,7 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelperP
 		}
 	} else {
 		// now helper
-		if *_helper == compileTimeEvaluatedHelpers[3] {
+		if *_helper == compileTimeEvaluatedHelpers[2] {
 			helper = _helper
 			call.Parameters = []*Parameter{{TimeSet: true, Time: time.Now()}}
 		}
