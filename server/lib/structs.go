@@ -85,6 +85,7 @@ const (
 	CloseConnection = "%quit%"
 )
 
+// TODO: better args
 // The interface for all of the different storage solutions.
 type Storage interface {
 	Init(persistent bool)

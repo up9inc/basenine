@@ -146,6 +146,7 @@ func handleConnection(conn net.Conn) {
 		case basenine.QUERY:
 			storage.StreamRecords(conn, data)
 		case basenine.SINGLE:
+			// TODO: parse args here.
 			if len(singleArgs) < 2 {
 				singleArgs = append(singleArgs, string(data))
 			}
