@@ -37,7 +37,10 @@ build-all:
 	$(MAKE) build GOOS=darwin GOARCH=arm64
 
 coverage:
-	cp server/coverage.out coverage.out && sed 1,1d server/lib/coverage.out >> coverage.out && sed 1,1d client/go/coverage.out >> coverage.out
+	cp server/coverage.out coverage.out && \
+	sed 1,1d server/lib/coverage.out >> coverage.out && \
+	sed 1,1d server/lib/storages/coverage.out >> coverage.out && \
+	sed 1,1d client/go/coverage.out >> coverage.out
 
 install-init-systemd:
 	cp scripts/init/systemd/basenine.service /etc/systemd/system/ && \
