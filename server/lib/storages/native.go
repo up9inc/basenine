@@ -387,7 +387,7 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 	rlimit := prop.Rlimit
 	_leftOff := prop.LeftOff
 
-	leftOff, err := storage.handleNegativeLeftOff(_leftOff)
+	leftOff, err := storage.handleNegativeLeftOff(_leftOff, 1)
 	if err != nil {
 		return
 	}
@@ -627,7 +627,7 @@ func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) (err err
 func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction string, query string, limit string) (err error) {
 	// Parse the arguments
 	var _leftOff int64
-	_leftOff, err = storage.handleNegativeLeftOff(leftOff)
+	_leftOff, err = storage.handleNegativeLeftOff(leftOff, 0)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: Cannot parse leftOff value to int: %s\n", err.Error())))
 		return
@@ -1143,7 +1143,7 @@ func (storage *nativeStorage) watchPartitions() (err error) {
 }
 
 // handleNegativeLeftOff handles negative leftOff value.
-func (storage *nativeStorage) handleNegativeLeftOff(_leftOff string) (leftOff int64, err error) {
+func (storage *nativeStorage) handleNegativeLeftOff(_leftOff string, increment int64) (leftOff int64, err error) {
 	// If leftOff value is -1 then set it to last offset
 	if _leftOff == basenine.LATEST {
 		storage.RLock()
@@ -1157,6 +1157,7 @@ func (storage *nativeStorage) handleNegativeLeftOff(_leftOff string) (leftOff in
 		var leftOffInt int
 		leftOffInt, err = strconv.Atoi(_leftOff)
 		leftOff = int64(leftOffInt)
+		leftOff += increment
 	}
 
 	return

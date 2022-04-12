@@ -149,6 +149,9 @@ func TestServerProtocolQueryMode(t *testing.T) {
 		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
 			defer wg.Done()
 			index := total - row.rlimit + row.leftOff
+			if row.leftOff != 0 {
+				index++
+			}
 			for {
 				scanner := bufio.NewScanner(conn)
 
