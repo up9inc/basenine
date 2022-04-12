@@ -70,7 +70,7 @@ func main() {
 	go func() {
 		sig := <-c
 		quitConnections()
-		storage.HandleExit(sig.(syscall.Signal))
+		storage.HandleExit(sig.(syscall.Signal), *persistent)
 	}()
 
 	// Start accepting TCP connections.

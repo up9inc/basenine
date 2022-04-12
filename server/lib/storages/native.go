@@ -29,9 +29,9 @@ import (
 )
 
 // Constants defines the database filename's prefix and file extension.
-const NATIVE_DB_FILE string = "data"
-const NATIVE_DB_FILE_LEGACY_EXT string = "bin"
-const NATIVE_DB_FILE_EXT string = "db"
+const NATIVE_STORAGE_DB_FILE string = "data"
+const NATIVE_STORAGE_DB_FILE_LEGACY_EXT string = "bin"
+const NATIVE_STORAGE_DB_FILE_EXT string = "db"
 
 var nativeStorageCoreDumpLock NativeStorageCoreDumpLock
 
@@ -77,6 +77,7 @@ type nativeStorage struct {
 	macros                map[string]string
 	insertionFilter       string
 	insertionFilterExpr   *basenine.Expression
+	watcher               *fsnotify.Watcher
 }
 
 // Unmutexed, file descriptor clean version of nativeStorage for achieving core dump.
@@ -95,35 +96,29 @@ type nativeStorageExport struct {
 }
 
 // Core dump filename
-const coreDumpFilename string = "basenine.gob"
-const coreDumpFilenameTemp string = "basenine_tmp.gob"
-
-// Global file watcher
-var watcher *fsnotify.Watcher
+const nativeStorageCoreDumpFilename string = "basenine.gob"
+const nativeStorageCoreDumpFilenameTemp string = "basenine_tmp.gob"
 
 // Serves as a core dump lock
 type NativeStorageCoreDumpLock struct {
 	sync.Mutex
 }
 
-var persistent bool
-var debug bool
-
 func NewNativeStorage(persistent bool) (storage basenine.Storage) {
+	// Initiate the watcher
+	watcher, err := fsnotify.NewWatcher()
+	basenine.Check(err)
+
 	// Initialize the native storage.
 	storage = &nativeStorage{
 		version:        basenine.VERSION,
 		partitionIndex: -1,
 		macros:         make(map[string]string),
+		watcher:        watcher,
 	}
 
 	// Initialize the core dump lock.
 	nativeStorageCoreDumpLock = NativeStorageCoreDumpLock{}
-
-	// Initiate the global watcher
-	var err error
-	watcher, err = fsnotify.NewWatcher()
-	basenine.Check(err)
 
 	storage.Init(persistent)
 
@@ -152,14 +147,14 @@ func (storage *nativeStorage) Init(persistent bool) {
 
 	// Trigger partitioning check for every second.
 	ticker := time.NewTicker(1 * time.Second)
-	go storage.periodicPartitioner(ticker)
+	go storage.periodicPartitioner(persistent, ticker)
 }
 
 // DumpCore dumps the core into a file named "basenine.gob"
 func (storage *nativeStorage) DumpCore(silent bool, dontLock bool) (err error) {
 	nativeStorageCoreDumpLock.Lock()
 	var f *os.File
-	f, err = os.Create(coreDumpFilenameTemp)
+	f, err = os.Create(nativeStorageCoreDumpFilenameTemp)
 	if err != nil {
 		return
 	}
@@ -198,10 +193,10 @@ func (storage *nativeStorage) DumpCore(silent bool, dontLock bool) (err error) {
 		return
 	}
 
-	os.Rename(coreDumpFilenameTemp, coreDumpFilename)
+	os.Rename(nativeStorageCoreDumpFilenameTemp, nativeStorageCoreDumpFilename)
 
 	if !silent {
-		log.Printf("Dumped the core to: %s\n", coreDumpFilename)
+		log.Printf("Dumped the core to: %s\n", nativeStorageCoreDumpFilename)
 	}
 	nativeStorageCoreDumpLock.Unlock()
 	return
@@ -211,7 +206,7 @@ func (storage *nativeStorage) DumpCore(silent bool, dontLock bool) (err error) {
 // if it's present in current working directory
 func (storage *nativeStorage) RestoreCore() (err error) {
 	var f *os.File
-	f, err = os.Open(coreDumpFilename)
+	f, err = os.Open(nativeStorageCoreDumpFilename)
 	if err != nil {
 		log.Printf("Warning while restoring the core: %v\n", err)
 		return
@@ -242,7 +237,7 @@ func (storage *nativeStorage) RestoreCore() (err error) {
 		}
 		storage.partitions = append(storage.partitions, paritition)
 
-		err = watcher.Add(paritition.Name())
+		err = storage.watcher.Add(paritition.Name())
 		if err != nil {
 			return
 		}
@@ -255,7 +250,7 @@ func (storage *nativeStorage) RestoreCore() (err error) {
 	storage.insertionFilter = csExport.InsertionFilter
 	storage.insertionFilterExpr, _, _ = storage.PrepareQuery(storage.insertionFilter)
 
-	log.Printf("Restored the core from: %s\n", coreDumpFilename)
+	log.Printf("Restored the core from: %s\n", nativeStorageCoreDumpFilename)
 	return
 }
 
@@ -326,13 +321,8 @@ func (storage *nativeStorage) InsertData(data []byte) {
 	// Write the record into database immediately after the last record.
 	// The offset is tracked by lastOffset which is storage.lastOffset
 	// WriteAt() is important here! Write() races.
-	n, err := f.WriteAt(data, lastOffset)
+	_, err := f.WriteAt(data, lastOffset)
 	basenine.Check(err)
-
-	if debug {
-		// Log the amount of bytes that are written into the database.
-		log.Printf("Wrote %d bytes to the partition: %s\n", n, f.Name())
-	}
 }
 
 // PrepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
@@ -888,8 +878,8 @@ func (storage *nativeStorage) Reset() {
 }
 
 // HandleExit gracefully exists the server accordingly. Dumps core if "-persistent" enabled.
-func (storage *nativeStorage) HandleExit(sig syscall.Signal) {
-	watcher.Close()
+func (storage *nativeStorage) HandleExit(sig syscall.Signal, persistent bool) {
+	storage.watcher.Close()
 
 	// 128: killed by a signal and dumped core
 	// + the signal value.
@@ -910,13 +900,13 @@ func (storage *nativeStorage) HandleExit(sig syscall.Signal) {
 func (storage *nativeStorage) newPartition() *os.File {
 	storage.Lock()
 	storage.partitionIndex++
-	f, err := os.OpenFile(fmt.Sprintf("%s_%09d.%s", NATIVE_DB_FILE, storage.partitionIndex, NATIVE_DB_FILE_EXT), os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fmt.Sprintf("%s_%09d.%s", NATIVE_STORAGE_DB_FILE, storage.partitionIndex, NATIVE_STORAGE_DB_FILE_EXT), os.O_CREATE|os.O_WRONLY, 0644)
 	basenine.Check(err)
 	storage.partitions = append(storage.partitions, f)
 	storage.lastOffset = 0
 	storage.Unlock()
 
-	err = watcher.Add(f.Name())
+	err = storage.watcher.Add(f.Name())
 	basenine.Check(err)
 
 	return f
@@ -924,7 +914,7 @@ func (storage *nativeStorage) newPartition() *os.File {
 
 // removeDatabaseFiles cleans up all of the database files.
 func (storage *nativeStorage) removeDatabaseFiles() {
-	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", NATIVE_DB_FILE_EXT))
+	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", NATIVE_STORAGE_DB_FILE_EXT))
 	basenine.Check(err)
 	for _, f := range files {
 		os.Remove(f)
@@ -933,11 +923,11 @@ func (storage *nativeStorage) removeDatabaseFiles() {
 
 // renameLegacyDatabaseFiles cleans up all of the database files.
 func (storage *nativeStorage) renameLegacyDatabaseFiles() {
-	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", NATIVE_DB_FILE_LEGACY_EXT))
+	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", NATIVE_STORAGE_DB_FILE_LEGACY_EXT))
 	basenine.Check(err)
 	for _, infile := range files {
 		ext := path.Ext(infile)
-		outfile := infile[0:len(infile)-len(ext)] + "." + NATIVE_DB_FILE_EXT
+		outfile := infile[0:len(infile)-len(ext)] + "." + NATIVE_STORAGE_DB_FILE_EXT
 		os.Rename(infile, outfile)
 	}
 }
@@ -1001,7 +991,7 @@ func (storage *nativeStorage) getLastTimestampOfPartition(discardedPartitionInde
 // periodicPartitioner is a Goroutine that handles database parititioning according
 // to the database size limit that's set by /limit command.
 // Triggered every second.
-func (storage *nativeStorage) periodicPartitioner(ticker *time.Ticker) {
+func (storage *nativeStorage) periodicPartitioner(persistent bool, ticker *time.Ticker) {
 	var f *os.File
 	for {
 		<-ticker.C
@@ -1045,7 +1035,7 @@ func (storage *nativeStorage) periodicPartitioner(ticker *time.Ticker) {
 				// We've created the third partition, so discard the first one.
 				discarded := storage.partitions[storage.partitionIndex-2]
 				discarded.Close()
-				err = watcher.Remove(discarded.Name())
+				err = storage.watcher.Remove(discarded.Name())
 				if err != nil {
 					log.Printf("Watch removal error: %v\n", err.Error())
 				}
@@ -1089,14 +1079,14 @@ func (storage *nativeStorage) readRecord(f *os.File, seek int64) (b []byte, n in
 // Blocks until a partition is modified
 func (storage *nativeStorage) watchPartitions() (err error) {
 	select {
-	case event, ok := <-watcher.Events:
+	case event, ok := <-storage.watcher.Events:
 		if !ok {
 			return
 		}
 		if event.Op&fsnotify.Write != fsnotify.Write {
 			return
 		}
-	case errW, ok := <-watcher.Errors:
+	case errW, ok := <-storage.watcher.Errors:
 		if !ok {
 			err = errW
 			return
@@ -1206,7 +1196,7 @@ func (storage *nativeStorage) removeAllWatchers() {
 		if partition == nil {
 			continue
 		}
-		err := watcher.Remove(partition.Name())
+		err := storage.watcher.Remove(partition.Name())
 		if err != nil {
 			log.Printf("Watch removal error: %v\n", err.Error())
 		}

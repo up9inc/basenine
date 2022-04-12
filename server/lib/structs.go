@@ -102,5 +102,5 @@ type Storage interface {
 	SetInsertionFilter(conn net.Conn, data []byte)
 	Flush()
 	Reset()
-	HandleExit(sig syscall.Signal)
+	HandleExit(sig syscall.Signal, persistent bool)
 }

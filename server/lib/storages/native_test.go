@@ -14,7 +14,7 @@ func TestServerNewPartition(t *testing.T) {
 
 	f := storage.newPartition()
 	assert.NotNil(t, f)
-	assert.FileExists(t, fmt.Sprintf("%s_%09d.%s", NATIVE_DB_FILE, storage.partitionIndex, NATIVE_DB_FILE_EXT))
+	assert.FileExists(t, fmt.Sprintf("%s_%09d.%s", NATIVE_STORAGE_DB_FILE, storage.partitionIndex, NATIVE_STORAGE_DB_FILE_EXT))
 }
 
 func TestServerDumpRestoreCore(t *testing.T) {
