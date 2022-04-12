@@ -521,14 +521,13 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 }
 
 // RetrieveSingle fetches a single record from the database.
-func (storage *nativeStorage) RetrieveSingle(conn net.Conn, args []string) (err error) {
+func (storage *nativeStorage) RetrieveSingle(conn net.Conn, index string, query string) (err error) {
 	// Convert index value provided as string to integer
-	index, err := strconv.Atoi(args[0])
+	_index, err := strconv.Atoi(index)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the index to integer: %s\n", err.Error())))
 		return
 	}
-	query := args[1]
 
 	// Safely access the length of offsets slice.
 	storage.RLock()
@@ -536,13 +535,13 @@ func (storage *nativeStorage) RetrieveSingle(conn net.Conn, args []string) (err 
 	storage.RUnlock()
 
 	// Check if the index is in the offsets slice.
-	if index > l {
-		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", index)))
+	if _index > l {
+		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", _index)))
 		return
 	}
 
 	// Safely acces the offsets and partition references
-	n, f, err := storage.getOffsetAndPartition(index)
+	n, f, err := storage.getOffsetAndPartition(_index)
 
 	// Record can only be removed if the partition of the record
 	// that it belongs to is removed. Therefore a file open error
@@ -594,33 +593,31 @@ func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) {
 }
 
 // Fetch fetches records in prefered direction, starting from leftOff up to given limit
-func (storage *nativeStorage) Fetch(conn net.Conn, args []string) {
+func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction string, query string, limit string) {
 	// Parse the arguments
-	_leftOff := args[0]
-	leftOff, err := storage.handleNegativeLeftOff(_leftOff)
+	_leftOff, err := storage.handleNegativeLeftOff(leftOff)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: Cannot parse leftOff value to int: %s\n", err.Error())))
 		return
 	}
 
-	direction, err := strconv.Atoi(args[1])
+	_direction, err := strconv.Atoi(direction)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the direction to integer: %s\n", err.Error())))
 		return
 	}
-	query := args[2]
-	limit, err := strconv.Atoi(args[3])
+	_limit, err := strconv.Atoi(limit)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the limit to integer: %s\n", err.Error())))
 		return
 	}
 
-	if direction < 0 {
-		if leftOff > 0 {
-			leftOff--
+	if _direction < 0 {
+		if _leftOff > 0 {
+			_leftOff--
 		}
 	} else {
-		leftOff++
+		_leftOff++
 	}
 
 	// Safely access the length of offsets slice.
@@ -629,8 +626,8 @@ func (storage *nativeStorage) Fetch(conn net.Conn, args []string) {
 	storage.RUnlock()
 
 	// Check if the leftOff is in the offsets slice.
-	if int(leftOff) > l {
-		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", leftOff)))
+	if int(_leftOff) > l {
+		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", _leftOff)))
 		return
 	}
 
@@ -664,12 +661,12 @@ func (storage *nativeStorage) Fetch(conn net.Conn, args []string) {
 	storage.RLock()
 	totalNumberOfRecords = len(storage.offsets)
 	truncatedTimestamp = storage.truncatedTimestamp
-	if direction < 0 {
-		subOffsets = storage.offsets[:leftOff]
-		subPartitionRefs = storage.partitionRefs[:leftOff]
+	if _direction < 0 {
+		subOffsets = storage.offsets[:_leftOff]
+		subPartitionRefs = storage.partitionRefs[:_leftOff]
 	} else {
-		subOffsets = storage.offsets[leftOff:]
-		subPartitionRefs = storage.partitionRefs[leftOff:]
+		subOffsets = storage.offsets[_leftOff:]
+		subPartitionRefs = storage.partitionRefs[_leftOff:]
 	}
 	removedOffsetsCounter = storage.removedOffsetsCounter
 	storage.RUnlock()
@@ -683,29 +680,29 @@ func (storage *nativeStorage) Fetch(conn net.Conn, args []string) {
 		NumberOfWritten:    numberOfWritten,
 		Current:            uint64(queried),
 		Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
-		LeftOff:            basenine.IndexToID(int(leftOff)),
+		LeftOff:            basenine.IndexToID(int(_leftOff)),
 		TruncatedTimestamp: truncatedTimestamp,
 	})
 
-	if direction < 0 {
+	if _direction < 0 {
 		subOffsets = basenine.ReverseSlice(subOffsets)
 		subPartitionRefs = basenine.ReverseSlice(subPartitionRefs)
 	}
 
 	// Iterate through the next part of the offsets
 	for i, offset := range subOffsets {
-		if int(numberOfWritten) >= limit {
+		if int(numberOfWritten) >= _limit {
 			return
 		}
 
-		if direction < 0 {
-			leftOff--
+		if _direction < 0 {
+			_leftOff--
 		} else {
-			leftOff++
+			_leftOff++
 		}
 
-		if leftOff < 0 {
-			leftOff = 0
+		if _leftOff < 0 {
+			_leftOff = 0
 		}
 
 		queried++
@@ -760,7 +757,7 @@ func (storage *nativeStorage) Fetch(conn net.Conn, args []string) {
 			NumberOfWritten:    numberOfWritten,
 			Current:            uint64(queried),
 			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
-			LeftOff:            basenine.IndexToID(int(leftOff)),
+			LeftOff:            basenine.IndexToID(int(_leftOff)),
 			TruncatedTimestamp: truncatedTimestamp,
 		})
 

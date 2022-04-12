@@ -146,19 +146,18 @@ func handleConnection(conn net.Conn) {
 		case basenine.QUERY:
 			storage.StreamRecords(conn, data)
 		case basenine.SINGLE:
-			// TODO: parse args here.
 			if len(singleArgs) < 2 {
 				singleArgs = append(singleArgs, string(data))
 			}
 			if len(singleArgs) == 2 {
-				storage.RetrieveSingle(conn, singleArgs)
+				storage.RetrieveSingle(conn, singleArgs[0], singleArgs[1])
 			}
 		case basenine.FETCH:
 			if len(fetchArgs) < 4 {
 				fetchArgs = append(fetchArgs, string(data))
 			}
 			if len(fetchArgs) == 4 {
-				storage.Fetch(conn, fetchArgs)
+				storage.Fetch(conn, fetchArgs[0], fetchArgs[1], fetchArgs[2], fetchArgs[3])
 			}
 		case basenine.VALIDATE:
 			storage.ValidateQuery(conn, data)
