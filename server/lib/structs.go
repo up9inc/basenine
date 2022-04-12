@@ -4,6 +4,11 @@
 
 package basenine
 
+import (
+	"net"
+	"syscall"
+)
+
 // Version of the software.
 const VERSION string = "0.7.0"
 
@@ -79,3 +84,22 @@ type Metadata struct {
 const (
 	CloseConnection = "%quit%"
 )
+
+// The interface for all of the different storage solutions.
+type Storage interface {
+	Init(persistent bool)
+	DumpCore(silent bool, dontLock bool) (err error)
+	RestoreCore() (err error)
+	InsertData(data []byte)
+	PrepareQuery(query string) (expr *Expression, prop Propagate, err error)
+	StreamRecords(conn net.Conn, data []byte) (err error)
+	RetrieveSingle(conn net.Conn, args []string) (err error)
+	ValidateQuery(conn net.Conn, data []byte)
+	Fetch(conn net.Conn, args []string)
+	ApplyMacro(conn net.Conn, data []byte)
+	SetLimit(conn net.Conn, data []byte)
+	SetInsertionFilter(conn net.Conn, data []byte)
+	Flush()
+	Reset()
+	HandleExit(sig syscall.Signal)
+}

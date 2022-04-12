@@ -27,7 +27,7 @@ import (
 	"syscall"
 
 	basenine "github.com/up9inc/basenine/server/lib"
-	"github.com/up9inc/basenine/server/lib/connectors"
+	"github.com/up9inc/basenine/server/lib/storages"
 )
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
@@ -36,7 +36,7 @@ var debug = flag.Bool("debug", false, "Enable debug logs.")
 var version = flag.Bool("version", false, "Print version and exit.")
 var persistent = flag.Bool("persistent", false, "Enable persistent mode. Dumps core on exit.")
 
-var connector basenine.Connector
+var storage basenine.Storage
 
 // Slice that stores the TCP connections
 var connections []net.Conn
@@ -52,7 +52,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	connector = connectors.NewNativeConnector(*persistent)
+	storage = storages.NewNativeStorage(*persistent)
 
 	// Start listenning to given address and port.
 	src := *addr + ":" + strconv.Itoa(*port)
@@ -70,7 +70,7 @@ func main() {
 	go func() {
 		sig := <-c
 		quitConnections()
-		connector.HandleExit(sig.(syscall.Signal))
+		storage.HandleExit(sig.(syscall.Signal))
 	}()
 
 	// Start accepting TCP connections.
@@ -133,43 +133,43 @@ func handleConnection(conn net.Conn) {
 			mode = _mode
 			switch mode {
 			case basenine.FLUSH:
-				connector.Flush()
+				storage.Flush()
 				basenine.SendOK(conn)
 			case basenine.RESET:
-				connector.Reset()
+				storage.Reset()
 				basenine.SendOK(conn)
 			}
 		case basenine.INSERT:
-			connector.InsertData(data)
+			storage.InsertData(data)
 		case basenine.INSERTION_FILTER:
-			connector.SetInsertionFilter(conn, data)
+			storage.SetInsertionFilter(conn, data)
 		case basenine.QUERY:
-			connector.StreamRecords(conn, data)
+			storage.StreamRecords(conn, data)
 		case basenine.SINGLE:
 			if len(singleArgs) < 2 {
 				singleArgs = append(singleArgs, string(data))
 			}
 			if len(singleArgs) == 2 {
-				connector.RetrieveSingle(conn, singleArgs)
+				storage.RetrieveSingle(conn, singleArgs)
 			}
 		case basenine.FETCH:
 			if len(fetchArgs) < 4 {
 				fetchArgs = append(fetchArgs, string(data))
 			}
 			if len(fetchArgs) == 4 {
-				connector.Fetch(conn, fetchArgs)
+				storage.Fetch(conn, fetchArgs)
 			}
 		case basenine.VALIDATE:
-			connector.ValidateQuery(conn, data)
+			storage.ValidateQuery(conn, data)
 		case basenine.MACRO:
-			connector.ApplyMacro(conn, data)
+			storage.ApplyMacro(conn, data)
 		case basenine.LIMIT:
-			connector.SetLimit(conn, data)
+			storage.SetLimit(conn, data)
 		case basenine.FLUSH:
-			connector.Flush()
+			storage.Flush()
 			basenine.SendOK(conn)
 		case basenine.RESET:
-			connector.Reset()
+			storage.Reset()
 			basenine.SendOK(conn)
 		}
 	}

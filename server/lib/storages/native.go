@@ -2,7 +2,7 @@
 // Use of this source code is governed by Apache License 2.0
 // license that can be found in the LICENSE file.
 
-package connectors
+package storages
 
 import (
 	"encoding/binary"
@@ -33,9 +33,9 @@ const NATIVE_DB_FILE string = "data"
 const NATIVE_DB_FILE_LEGACY_EXT string = "bin"
 const NATIVE_DB_FILE_EXT string = "db"
 
-var nativeConnectorCoreDumpLock NativeConnectorCoreDumpLock
+var nativeStorageCoreDumpLock NativeStorageCoreDumpLock
 
-// nativeConnector is a mutually excluded struct that contains a list of fields that
+// nativeStorage is a mutually excluded struct that contains a list of fields that
 // needs to be safely accessed data across multiple goroutines.
 //
 // version is the database server version.
@@ -63,7 +63,7 @@ var nativeConnectorCoreDumpLock NativeConnectorCoreDumpLock
 // insertionFilter is the filter that's applied just before the insertion of every individual record.
 //
 // insertionFilterExpr is the parsed version of insertionFilter
-type nativeConnector struct {
+type nativeStorage struct {
 	sync.RWMutex
 	version               string
 	lastOffset            int64
@@ -79,8 +79,8 @@ type nativeConnector struct {
 	insertionFilterExpr   *basenine.Expression
 }
 
-// Unmutexed, file descriptor clean version of nativeConnector for achieving core dump.
-type nativeConnectorExport struct {
+// Unmutexed, file descriptor clean version of nativeStorage for achieving core dump.
+type nativeStorageExport struct {
 	Version               string
 	LastOffset            int64
 	PartitionRefs         []int64
@@ -102,43 +102,43 @@ const coreDumpFilenameTemp string = "basenine_tmp.gob"
 var watcher *fsnotify.Watcher
 
 // Serves as a core dump lock
-type NativeConnectorCoreDumpLock struct {
+type NativeStorageCoreDumpLock struct {
 	sync.Mutex
 }
 
 var persistent bool
 var debug bool
 
-func NewNativeConnector(persistent bool) (connector basenine.Connector) {
-	// Initialize the native connector.
-	connector = &nativeConnector{
+func NewNativeStorage(persistent bool) (storage basenine.Storage) {
+	// Initialize the native storage.
+	storage = &nativeStorage{
 		version:        basenine.VERSION,
 		partitionIndex: -1,
 		macros:         make(map[string]string),
 	}
 
 	// Initialize the core dump lock.
-	nativeConnectorCoreDumpLock = NativeConnectorCoreDumpLock{}
+	nativeStorageCoreDumpLock = NativeStorageCoreDumpLock{}
 
 	// Initiate the global watcher
 	var err error
 	watcher, err = fsnotify.NewWatcher()
 	basenine.Check(err)
 
-	connector.Init(persistent)
+	storage.Init(persistent)
 
 	return
 }
 
-// Init initializes the connector
-func (connector *nativeConnector) Init(persistent bool) {
+// Init initializes the storage
+func (storage *nativeStorage) Init(persistent bool) {
 	// Rename the legacy database files
-	connector.renameLegacyDatabaseFiles()
+	storage.renameLegacyDatabaseFiles()
 
 	// If persistent mode is enabled, try to restore the core.
 	var isRestored bool
 	if persistent {
-		err := connector.RestoreCore()
+		err := storage.RestoreCore()
 		if err == nil {
 			isRestored = true
 		}
@@ -146,18 +146,18 @@ func (connector *nativeConnector) Init(persistent bool) {
 
 	if !isRestored {
 		// Clean up the database files.
-		connector.removeDatabaseFiles()
-		connector.newPartition()
+		storage.removeDatabaseFiles()
+		storage.newPartition()
 	}
 
 	// Trigger partitioning check for every second.
 	ticker := time.NewTicker(1 * time.Second)
-	go connector.periodicPartitioner(ticker)
+	go storage.periodicPartitioner(ticker)
 }
 
 // DumpCore dumps the core into a file named "basenine.gob"
-func (connector *nativeConnector) DumpCore(silent bool, dontLock bool) (err error) {
-	nativeConnectorCoreDumpLock.Lock()
+func (storage *nativeStorage) DumpCore(silent bool, dontLock bool) (err error) {
+	nativeStorageCoreDumpLock.Lock()
 	var f *os.File
 	f, err = os.Create(coreDumpFilenameTemp)
 	if err != nil {
@@ -166,30 +166,30 @@ func (connector *nativeConnector) DumpCore(silent bool, dontLock bool) (err erro
 	defer f.Close()
 	encoder := gob.NewEncoder(f)
 
-	// nativeConnector has an embedded mutex. Therefore it cannot be dumped directly.
-	var csExport nativeConnectorExport
+	// nativeStorage has an embedded mutex. Therefore it cannot be dumped directly.
+	var csExport nativeStorageExport
 	if !dontLock {
-		connector.Lock()
+		storage.Lock()
 	}
-	csExport.Version = connector.version
-	csExport.LastOffset = connector.lastOffset
-	csExport.PartitionRefs = connector.partitionRefs
-	csExport.Offsets = connector.offsets
-	for _, partition := range connector.partitions {
+	csExport.Version = storage.version
+	csExport.LastOffset = storage.lastOffset
+	csExport.PartitionRefs = storage.partitionRefs
+	csExport.Offsets = storage.offsets
+	for _, partition := range storage.partitions {
 		partitionPath := ""
 		if partition != nil {
 			partitionPath = partition.Name()
 		}
 		csExport.PartitionPaths = append(csExport.PartitionPaths, partitionPath)
 	}
-	csExport.PartitionIndex = connector.partitionIndex
-	csExport.PartitionSizeLimit = connector.partitionSizeLimit
-	csExport.TruncatedTimestamp = connector.truncatedTimestamp
-	csExport.RemovedOffsetsCounter = connector.removedOffsetsCounter
-	csExport.Macros = connector.macros
-	csExport.InsertionFilter = connector.insertionFilter
+	csExport.PartitionIndex = storage.partitionIndex
+	csExport.PartitionSizeLimit = storage.partitionSizeLimit
+	csExport.TruncatedTimestamp = storage.truncatedTimestamp
+	csExport.RemovedOffsetsCounter = storage.removedOffsetsCounter
+	csExport.Macros = storage.macros
+	csExport.InsertionFilter = storage.insertionFilter
 	if !dontLock {
-		connector.Unlock()
+		storage.Unlock()
 	}
 
 	err = encoder.Encode(csExport)
@@ -203,13 +203,13 @@ func (connector *nativeConnector) DumpCore(silent bool, dontLock bool) (err erro
 	if !silent {
 		log.Printf("Dumped the core to: %s\n", coreDumpFilename)
 	}
-	nativeConnectorCoreDumpLock.Unlock()
+	nativeStorageCoreDumpLock.Unlock()
 	return
 }
 
 // RestoreCore restores the core from a file named "basenine.gob"
 // if it's present in current working directory
-func (connector *nativeConnector) RestoreCore() (err error) {
+func (storage *nativeStorage) RestoreCore() (err error) {
 	var f *os.File
 	f, err = os.Open(coreDumpFilename)
 	if err != nil {
@@ -219,20 +219,20 @@ func (connector *nativeConnector) RestoreCore() (err error) {
 	defer f.Close()
 	decoder := gob.NewDecoder(f)
 
-	var csExport nativeConnectorExport
+	var csExport nativeStorageExport
 	err = decoder.Decode(&csExport)
 	if err != nil {
 		log.Printf("Error while restoring the core: %v\n", err.Error())
 		return
 	}
 
-	connector.version = basenine.VERSION
-	connector.lastOffset = csExport.LastOffset
-	connector.partitionRefs = csExport.PartitionRefs
-	connector.offsets = csExport.Offsets
+	storage.version = basenine.VERSION
+	storage.lastOffset = csExport.LastOffset
+	storage.partitionRefs = csExport.PartitionRefs
+	storage.offsets = csExport.Offsets
 	for _, partitionPath := range csExport.PartitionPaths {
 		if partitionPath == "" {
-			connector.partitions = append(connector.partitions, nil)
+			storage.partitions = append(storage.partitions, nil)
 			continue
 		}
 		var paritition *os.File
@@ -240,20 +240,20 @@ func (connector *nativeConnector) RestoreCore() (err error) {
 		if err != nil {
 			return
 		}
-		connector.partitions = append(connector.partitions, paritition)
+		storage.partitions = append(storage.partitions, paritition)
 
 		err = watcher.Add(paritition.Name())
 		if err != nil {
 			return
 		}
 	}
-	connector.partitionIndex = csExport.PartitionIndex
-	connector.partitionSizeLimit = csExport.PartitionSizeLimit
-	connector.truncatedTimestamp = csExport.TruncatedTimestamp
-	connector.removedOffsetsCounter = csExport.RemovedOffsetsCounter
-	connector.macros = csExport.Macros
-	connector.insertionFilter = csExport.InsertionFilter
-	connector.insertionFilterExpr, _, _ = connector.PrepareQuery(connector.insertionFilter)
+	storage.partitionIndex = csExport.PartitionIndex
+	storage.partitionSizeLimit = csExport.PartitionSizeLimit
+	storage.truncatedTimestamp = csExport.TruncatedTimestamp
+	storage.removedOffsetsCounter = csExport.RemovedOffsetsCounter
+	storage.macros = csExport.Macros
+	storage.insertionFilter = csExport.InsertionFilter
+	storage.insertionFilterExpr, _, _ = storage.PrepareQuery(storage.insertionFilter)
 
 	log.Printf("Restored the core from: %s\n", coreDumpFilename)
 	return
@@ -265,21 +265,21 @@ func (connector *nativeConnector) RestoreCore() (err error) {
 // index of that record.
 // Then marshals that map back and safely writes the bytes into
 // the current database partitition.
-func (connector *nativeConnector) InsertData(data []byte) {
+func (storage *nativeStorage) InsertData(data []byte) {
 	// partitionIndex -1 means there are not partitions created yet
 	// Safely access the current partition index
-	connector.RLock()
-	currentPartitionIndex := connector.partitionIndex
-	connector.RUnlock()
+	storage.RLock()
+	currentPartitionIndex := storage.partitionIndex
+	storage.RUnlock()
 	if currentPartitionIndex == -1 {
-		connector.newPartition()
+		storage.newPartition()
 	}
 
 	// Handle the insertion filter if it's not empty
-	connector.RLock()
-	insertionFilter := connector.insertionFilter
-	insertionFilterExpr := connector.insertionFilterExpr
-	connector.RUnlock()
+	storage.RLock()
+	insertionFilter := storage.insertionFilter
+	insertionFilterExpr := storage.insertionFilterExpr
+	storage.RUnlock()
 	if len(insertionFilter) > 0 {
 		truth, record, err := basenine.Eval(insertionFilterExpr, string(data))
 		basenine.Check(err)
@@ -296,10 +296,10 @@ func (connector *nativeConnector) InsertData(data []byte) {
 
 	var lastOffset int64
 	// Safely access the last offset and current partition.
-	connector.Lock()
-	l := len(connector.offsets)
-	lastOffset = connector.lastOffset
-	f := connector.partitions[connector.partitionIndex]
+	storage.Lock()
+	l := len(storage.offsets)
+	lastOffset = storage.lastOffset
+	f := storage.partitions[storage.partitionIndex]
 
 	// Set "id" field to the index of the record.
 	d["id"] = basenine.IndexToID(l)
@@ -313,18 +313,18 @@ func (connector *nativeConnector) InsertData(data []byte) {
 	binary.LittleEndian.PutUint64(b, uint64(length))
 
 	// Safely update the offsets and paritition references.
-	connector.offsets = append(connector.offsets, lastOffset)
-	connector.partitionRefs = append(connector.partitionRefs, connector.partitionIndex)
-	connector.lastOffset = lastOffset + 8 + length
+	storage.offsets = append(storage.offsets, lastOffset)
+	storage.partitionRefs = append(storage.partitionRefs, storage.partitionIndex)
+	storage.lastOffset = lastOffset + 8 + length
 
 	// Release the lock
-	connector.Unlock()
+	storage.Unlock()
 
 	// Prepend the length into the data.
 	data = append(b, data...)
 
 	// Write the record into database immediately after the last record.
-	// The offset is tracked by lastOffset which is connector.lastOffset
+	// The offset is tracked by lastOffset which is storage.lastOffset
 	// WriteAt() is important here! Write() races.
 	n, err := f.WriteAt(data, lastOffset)
 	basenine.Check(err)
@@ -336,11 +336,11 @@ func (connector *nativeConnector) InsertData(data []byte) {
 }
 
 // PrepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
-func (connector *nativeConnector) PrepareQuery(query string) (expr *basenine.Expression, prop basenine.Propagate, err error) {
+func (storage *nativeStorage) PrepareQuery(query string) (expr *basenine.Expression, prop basenine.Propagate, err error) {
 	// Expand all macros in the query, if there are any.
-	connector.RLock()
-	macros := connector.macros
-	connector.RUnlock()
+	storage.RLock()
+	macros := storage.macros
+	storage.RUnlock()
 	query, err = basenine.ExpandMacros(macros, query)
 	basenine.Check(err)
 
@@ -351,7 +351,7 @@ func (connector *nativeConnector) PrepareQuery(query string) (expr *basenine.Exp
 		return
 	}
 
-	// leftOff is the state to track the last offset's index in connector.offsets
+	// leftOff is the state to track the last offset's index in storage.offsets
 	// default value of leftOff is 0. leftOff(..) helper overrides it.
 	// can be -1 also, means that it's last record.
 	prop, err = basenine.Precompute(expr)
@@ -365,8 +365,8 @@ func (connector *nativeConnector) PrepareQuery(query string) (expr *basenine.Exp
 // and filters out the records according to query.
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
-func (connector *nativeConnector) StreamRecords(conn net.Conn, data []byte) (err error) {
-	expr, prop, err := connector.PrepareQuery(string(data))
+func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err error) {
+	expr, prop, err := storage.PrepareQuery(string(data))
 	if err != nil {
 		conn.Close()
 		return
@@ -375,7 +375,7 @@ func (connector *nativeConnector) StreamRecords(conn net.Conn, data []byte) (err
 	rlimit := prop.Rlimit
 	_leftOff := prop.LeftOff
 
-	leftOff, err := connector.handleNegativeLeftOff(_leftOff)
+	leftOff, err := storage.handleNegativeLeftOff(_leftOff)
 	if err != nil {
 		return
 	}
@@ -411,13 +411,13 @@ func (connector *nativeConnector) StreamRecords(conn net.Conn, data []byte) (err
 		}
 
 		// Safely access the next part of offsets and partition references.
-		connector.RLock()
-		subOffsets := connector.offsets[leftOff:]
-		subPartitionRefs := connector.partitionRefs[leftOff:]
-		totalNumberOfRecords := len(connector.offsets)
-		truncatedTimestamp := connector.truncatedTimestamp
-		removedOffsetsCounter = connector.removedOffsetsCounter
-		connector.RUnlock()
+		storage.RLock()
+		subOffsets := storage.offsets[leftOff:]
+		subPartitionRefs := storage.partitionRefs[leftOff:]
+		totalNumberOfRecords := len(storage.offsets)
+		truncatedTimestamp := storage.truncatedTimestamp
+		removedOffsetsCounter = storage.removedOffsetsCounter
+		storage.RUnlock()
 
 		// Disable rlimit if it's bigger than the total records.
 		if rlimit > 0 && int(rlimit) >= len(subOffsets) {
@@ -433,12 +433,12 @@ func (connector *nativeConnector) StreamRecords(conn net.Conn, data []byte) (err
 
 			// Safely access the *os.File pointer that the current offset refers to.
 			var partitionRef int64
-			connector.RLock()
+			storage.RLock()
 			partitionRef = subPartitionRefs[i]
-			fRef := connector.partitions[partitionRef]
-			totalNumberOfRecords = len(connector.offsets)
-			truncatedTimestamp = connector.truncatedTimestamp
-			connector.RUnlock()
+			fRef := storage.partitions[partitionRef]
+			totalNumberOfRecords = len(storage.offsets)
+			truncatedTimestamp = storage.truncatedTimestamp
+			storage.RUnlock()
 
 			// File descriptor nil means; the partition is removed. So we pass this offset.
 			if fRef == nil {
@@ -467,7 +467,7 @@ func (connector *nativeConnector) StreamRecords(conn net.Conn, data []byte) (err
 
 			// Read the record into b
 			var b []byte
-			b, _, err = connector.readRecord(f, offset)
+			b, _, err = storage.readRecord(f, offset)
 
 			// Even if it's EOF, continue.
 			// Because a later offset might point to a previous region of the file.
@@ -521,17 +521,17 @@ func (connector *nativeConnector) StreamRecords(conn net.Conn, data []byte) (err
 		}
 
 		if rlimit > 0 {
-			numberOfWritten, err = connector.rlimitWrite(conn, f, rlimit, rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
+			numberOfWritten, err = storage.rlimitWrite(conn, f, rlimit, rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
 			rlimit = 0
 		}
 
 		// Block until a partition is modified
-		connector.watchPartitions()
+		storage.watchPartitions()
 	}
 }
 
 // RetrieveSingle fetches a single record from the database.
-func (connector *nativeConnector) RetrieveSingle(conn net.Conn, args []string) (err error) {
+func (storage *nativeStorage) RetrieveSingle(conn net.Conn, args []string) (err error) {
 	// Convert index value provided as string to integer
 	index, err := strconv.Atoi(args[0])
 	if err != nil {
@@ -541,9 +541,9 @@ func (connector *nativeConnector) RetrieveSingle(conn net.Conn, args []string) (
 	query := args[1]
 
 	// Safely access the length of offsets slice.
-	connector.RLock()
-	l := len(connector.offsets)
-	connector.RUnlock()
+	storage.RLock()
+	l := len(storage.offsets)
+	storage.RUnlock()
 
 	// Check if the index is in the offsets slice.
 	if index > l {
@@ -552,7 +552,7 @@ func (connector *nativeConnector) RetrieveSingle(conn net.Conn, args []string) (
 	}
 
 	// Safely acces the offsets and partition references
-	n, f, err := connector.getOffsetAndPartition(index)
+	n, f, err := storage.getOffsetAndPartition(index)
 
 	// Record can only be removed if the partition of the record
 	// that it belongs to is removed. Therefore a file open error
@@ -568,11 +568,11 @@ func (connector *nativeConnector) RetrieveSingle(conn net.Conn, args []string) (
 	// Read it using its offset (which is n) and return it.
 	f.Seek(n, io.SeekStart)
 	var b []byte
-	b, _, err = connector.readRecord(f, n)
+	b, _, err = storage.readRecord(f, n)
 	f.Close()
 
 	// Callling `Eval` for record altering helpers like `redact`
-	expr, _, err := connector.PrepareQuery(query)
+	expr, _, err := storage.PrepareQuery(query)
 	if err != nil {
 		conn.Close()
 		return
@@ -586,12 +586,12 @@ func (connector *nativeConnector) RetrieveSingle(conn net.Conn, args []string) (
 
 // ValidateQuery tries to parse the given query and checks if there are
 // any syntax errors or not.
-func (connector *nativeConnector) ValidateQuery(conn net.Conn, data []byte) {
+func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) {
 	query := string(data)
 	// Expand all macros in the query, if there are any.
-	connector.RLock()
-	macros := connector.macros
-	connector.RUnlock()
+	storage.RLock()
+	macros := storage.macros
+	storage.RUnlock()
 	query, err := basenine.ExpandMacros(macros, query)
 	basenine.Check(err)
 	_, err = basenine.Parse(query)
@@ -604,10 +604,10 @@ func (connector *nativeConnector) ValidateQuery(conn net.Conn, data []byte) {
 }
 
 // Fetch fetches records in prefered direction, starting from leftOff up to given limit
-func (connector *nativeConnector) Fetch(conn net.Conn, args []string) {
+func (storage *nativeStorage) Fetch(conn net.Conn, args []string) {
 	// Parse the arguments
 	_leftOff := args[0]
-	leftOff, err := connector.handleNegativeLeftOff(_leftOff)
+	leftOff, err := storage.handleNegativeLeftOff(_leftOff)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: Cannot parse leftOff value to int: %s\n", err.Error())))
 		return
@@ -634,9 +634,9 @@ func (connector *nativeConnector) Fetch(conn net.Conn, args []string) {
 	}
 
 	// Safely access the length of offsets slice.
-	connector.RLock()
-	l := len(connector.offsets)
-	connector.RUnlock()
+	storage.RLock()
+	l := len(storage.offsets)
+	storage.RUnlock()
 
 	// Check if the leftOff is in the offsets slice.
 	if int(leftOff) > l {
@@ -645,7 +645,7 @@ func (connector *nativeConnector) Fetch(conn net.Conn, args []string) {
 	}
 
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
-	expr, _, err := connector.PrepareQuery(query)
+	expr, _, err := storage.PrepareQuery(query)
 	if err != nil {
 		conn.Close()
 	}
@@ -671,18 +671,18 @@ func (connector *nativeConnector) Fetch(conn net.Conn, args []string) {
 	var totalNumberOfRecords int
 	var truncatedTimestamp int64
 	var removedOffsetsCounter int
-	connector.RLock()
-	totalNumberOfRecords = len(connector.offsets)
-	truncatedTimestamp = connector.truncatedTimestamp
+	storage.RLock()
+	totalNumberOfRecords = len(storage.offsets)
+	truncatedTimestamp = storage.truncatedTimestamp
 	if direction < 0 {
-		subOffsets = connector.offsets[:leftOff]
-		subPartitionRefs = connector.partitionRefs[:leftOff]
+		subOffsets = storage.offsets[:leftOff]
+		subPartitionRefs = storage.partitionRefs[:leftOff]
 	} else {
-		subOffsets = connector.offsets[leftOff:]
-		subPartitionRefs = connector.partitionRefs[leftOff:]
+		subOffsets = storage.offsets[leftOff:]
+		subPartitionRefs = storage.partitionRefs[leftOff:]
 	}
-	removedOffsetsCounter = connector.removedOffsetsCounter
-	connector.RUnlock()
+	removedOffsetsCounter = storage.removedOffsetsCounter
+	storage.RUnlock()
 
 	var metadata []byte
 
@@ -722,10 +722,10 @@ func (connector *nativeConnector) Fetch(conn net.Conn, args []string) {
 
 		// Safely access the *os.File pointer that the current offset refers to.
 		var partitionRef int64
-		connector.RLock()
+		storage.RLock()
 		partitionRef = subPartitionRefs[i]
-		fRef := connector.partitions[partitionRef]
-		connector.RUnlock()
+		fRef := storage.partitions[partitionRef]
+		storage.RUnlock()
 
 		// File descriptor nil means; the partition is removed. So we pass this offset.
 		if fRef == nil {
@@ -754,7 +754,7 @@ func (connector *nativeConnector) Fetch(conn net.Conn, args []string) {
 
 		// Read the record into b
 		var b []byte
-		b, _, err = connector.readRecord(f, offset)
+		b, _, err = storage.readRecord(f, offset)
 
 		// Even if it's EOF, continue.
 		// Because a later offset might point to a previous region of the file.
@@ -793,7 +793,7 @@ func (connector *nativeConnector) Fetch(conn net.Conn, args []string) {
 }
 
 // ApplyMacro defines a macro that will be expanded for each individual query.
-func (connector *nativeConnector) ApplyMacro(conn net.Conn, data []byte) {
+func (storage *nativeStorage) ApplyMacro(conn net.Conn, data []byte) {
 	str := string(data)
 
 	s := strings.Split(str, "~")
@@ -806,15 +806,15 @@ func (connector *nativeConnector) ApplyMacro(conn net.Conn, data []byte) {
 	macro := strings.TrimSpace(s[0])
 	expanded := strings.TrimSpace(s[1])
 
-	connector.Lock()
-	connector.macros = basenine.AddMacro(connector.macros, macro, expanded)
-	connector.Unlock()
+	storage.Lock()
+	storage.macros = basenine.AddMacro(storage.macros, macro, expanded)
+	storage.Unlock()
 
 	basenine.SendOK(conn)
 }
 
 // SetLimit sets a limit for the maximum database size.
-func (connector *nativeConnector) SetLimit(conn net.Conn, data []byte) {
+func (storage *nativeStorage) SetLimit(conn net.Conn, data []byte) {
 	value, err := strconv.Atoi(string(data))
 
 	if err != nil {
@@ -822,24 +822,24 @@ func (connector *nativeConnector) SetLimit(conn net.Conn, data []byte) {
 		return
 	}
 
-	connector.Lock()
-	connector.partitionSizeLimit = int64(value) / 2
-	connector.Unlock()
+	storage.Lock()
+	storage.partitionSizeLimit = int64(value) / 2
+	storage.Unlock()
 
 	basenine.SendOK(conn)
 }
 
 // SetInsertionFilter tries to set the given query as an insertion filter
-func (connector *nativeConnector) SetInsertionFilter(conn net.Conn, data []byte) {
+func (storage *nativeStorage) SetInsertionFilter(conn net.Conn, data []byte) {
 	query := string(data)
 
-	insertionFilterExpr, _, err := connector.PrepareQuery(query)
+	insertionFilterExpr, _, err := storage.PrepareQuery(query)
 
 	if err == nil {
-		connector.Lock()
-		connector.insertionFilter = query
-		connector.insertionFilterExpr = insertionFilterExpr
-		connector.Unlock()
+		storage.Lock()
+		storage.insertionFilter = query
+		storage.insertionFilterExpr = insertionFilterExpr
+		storage.Unlock()
 		basenine.SendOK(conn)
 	} else {
 		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
@@ -847,48 +847,48 @@ func (connector *nativeConnector) SetInsertionFilter(conn net.Conn, data []byte)
 }
 
 // Flush removes all the records in the database.
-func (connector *nativeConnector) Flush() {
-	connector.Lock()
-	connector.removeAllWatchers()
-	connector.lastOffset = 0
-	connector.partitionRefs = []int64{}
-	connector.offsets = []int64{}
-	connector.partitions = []*os.File{}
-	connector.partitionIndex = -1
-	connector.partitionSizeLimit = 0
-	connector.truncatedTimestamp = 0
-	connector.removedOffsetsCounter = 0
-	connector.removeDatabaseFiles()
-	connector.DumpCore(true, true)
-	connector.Unlock()
-	connector.newPartition()
+func (storage *nativeStorage) Flush() {
+	storage.Lock()
+	storage.removeAllWatchers()
+	storage.lastOffset = 0
+	storage.partitionRefs = []int64{}
+	storage.offsets = []int64{}
+	storage.partitions = []*os.File{}
+	storage.partitionIndex = -1
+	storage.partitionSizeLimit = 0
+	storage.truncatedTimestamp = 0
+	storage.removedOffsetsCounter = 0
+	storage.removeDatabaseFiles()
+	storage.DumpCore(true, true)
+	storage.Unlock()
+	storage.newPartition()
 }
 
 // Reset removes all the records in the database and
 // resets the core's state into its initial form.
-func (connector *nativeConnector) Reset() {
-	connector.Lock()
-	connector.removeAllWatchers()
-	connector.version = basenine.VERSION
-	connector.macros = make(map[string]string)
-	connector.insertionFilter = ""
-	connector.insertionFilterExpr = nil
-	connector.lastOffset = 0
-	connector.partitionRefs = []int64{}
-	connector.offsets = []int64{}
-	connector.partitions = []*os.File{}
-	connector.partitionIndex = -1
-	connector.partitionSizeLimit = 0
-	connector.truncatedTimestamp = 0
-	connector.removedOffsetsCounter = 0
-	connector.removeDatabaseFiles()
-	connector.DumpCore(true, true)
-	connector.Unlock()
-	connector.newPartition()
+func (storage *nativeStorage) Reset() {
+	storage.Lock()
+	storage.removeAllWatchers()
+	storage.version = basenine.VERSION
+	storage.macros = make(map[string]string)
+	storage.insertionFilter = ""
+	storage.insertionFilterExpr = nil
+	storage.lastOffset = 0
+	storage.partitionRefs = []int64{}
+	storage.offsets = []int64{}
+	storage.partitions = []*os.File{}
+	storage.partitionIndex = -1
+	storage.partitionSizeLimit = 0
+	storage.truncatedTimestamp = 0
+	storage.removedOffsetsCounter = 0
+	storage.removeDatabaseFiles()
+	storage.DumpCore(true, true)
+	storage.Unlock()
+	storage.newPartition()
 }
 
 // HandleExit gracefully exists the server accordingly. Dumps core if "-persistent" enabled.
-func (connector *nativeConnector) HandleExit(sig syscall.Signal) {
+func (storage *nativeStorage) HandleExit(sig syscall.Signal) {
 	watcher.Close()
 
 	// 128: killed by a signal and dumped core
@@ -896,25 +896,25 @@ func (connector *nativeConnector) HandleExit(sig syscall.Signal) {
 	exitCode := int(128 + sig)
 
 	if !persistent {
-		connector.removeDatabaseFiles()
+		storage.removeDatabaseFiles()
 		os.Exit(exitCode)
 	}
 
-	connector.DumpCore(false, false)
+	storage.DumpCore(false, false)
 
 	os.Exit(exitCode)
 }
 
 // newPartition crates a new database paritition. The filename format is data_000000000.db
 // Such that the filename increments according to the partition index.
-func (connector *nativeConnector) newPartition() *os.File {
-	connector.Lock()
-	connector.partitionIndex++
-	f, err := os.OpenFile(fmt.Sprintf("%s_%09d.%s", NATIVE_DB_FILE, connector.partitionIndex, NATIVE_DB_FILE_EXT), os.O_CREATE|os.O_WRONLY, 0644)
+func (storage *nativeStorage) newPartition() *os.File {
+	storage.Lock()
+	storage.partitionIndex++
+	f, err := os.OpenFile(fmt.Sprintf("%s_%09d.%s", NATIVE_DB_FILE, storage.partitionIndex, NATIVE_DB_FILE_EXT), os.O_CREATE|os.O_WRONLY, 0644)
 	basenine.Check(err)
-	connector.partitions = append(connector.partitions, f)
-	connector.lastOffset = 0
-	connector.Unlock()
+	storage.partitions = append(storage.partitions, f)
+	storage.lastOffset = 0
+	storage.Unlock()
 
 	err = watcher.Add(f.Name())
 	basenine.Check(err)
@@ -923,7 +923,7 @@ func (connector *nativeConnector) newPartition() *os.File {
 }
 
 // removeDatabaseFiles cleans up all of the database files.
-func (connector *nativeConnector) removeDatabaseFiles() {
+func (storage *nativeStorage) removeDatabaseFiles() {
 	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", NATIVE_DB_FILE_EXT))
 	basenine.Check(err)
 	for _, f := range files {
@@ -932,7 +932,7 @@ func (connector *nativeConnector) removeDatabaseFiles() {
 }
 
 // renameLegacyDatabaseFiles cleans up all of the database files.
-func (connector *nativeConnector) renameLegacyDatabaseFiles() {
+func (storage *nativeStorage) renameLegacyDatabaseFiles() {
 	files, err := filepath.Glob(fmt.Sprintf("./data_*.%s", NATIVE_DB_FILE_LEGACY_EXT))
 	basenine.Check(err)
 	for _, infile := range files {
@@ -942,11 +942,11 @@ func (connector *nativeConnector) renameLegacyDatabaseFiles() {
 	}
 }
 
-func (connector *nativeConnector) getLastTimestampOfPartition(discardedPartitionIndex int64) (timestamp int64, err error) {
-	connector.RLock()
-	offsets := connector.offsets
-	partitionRefs := connector.partitionRefs
-	connector.RUnlock()
+func (storage *nativeStorage) getLastTimestampOfPartition(discardedPartitionIndex int64) (timestamp int64, err error) {
+	storage.RLock()
+	offsets := storage.offsets
+	partitionRefs := storage.partitionRefs
+	storage.RUnlock()
 
 	var prevIndex int
 	var removedOffsetsCounter int
@@ -958,13 +958,13 @@ func (connector *nativeConnector) getLastTimestampOfPartition(discardedPartition
 		removedOffsetsCounter++
 	}
 
-	connector.Lock()
-	connector.removedOffsetsCounter = removedOffsetsCounter
-	connector.Unlock()
+	storage.Lock()
+	storage.removedOffsetsCounter = removedOffsetsCounter
+	storage.Unlock()
 
 	var n int64
 	var f *os.File
-	n, f, err = connector.getOffsetAndPartition(prevIndex)
+	n, f, err = storage.getOffsetAndPartition(prevIndex)
 
 	if err != nil {
 		return
@@ -972,7 +972,7 @@ func (connector *nativeConnector) getLastTimestampOfPartition(discardedPartition
 
 	f.Seek(n, io.SeekStart)
 	var b []byte
-	b, _, err = connector.readRecord(f, n)
+	b, _, err = storage.readRecord(f, n)
 	f.Close()
 
 	var jsonPath jp.Expr
@@ -1001,62 +1001,62 @@ func (connector *nativeConnector) getLastTimestampOfPartition(discardedPartition
 // periodicPartitioner is a Goroutine that handles database parititioning according
 // to the database size limit that's set by /limit command.
 // Triggered every second.
-func (connector *nativeConnector) periodicPartitioner(ticker *time.Ticker) {
+func (storage *nativeStorage) periodicPartitioner(ticker *time.Ticker) {
 	var f *os.File
 	for {
 		<-ticker.C
 
 		if persistent {
 			// Dump the core periodically
-			connector.DumpCore(true, false)
+			storage.DumpCore(true, false)
 		}
 
 		var partitionSizeLimit int64
 
 		// Safely access the partition size limit, current partition index and get the current partition
-		connector.RLock()
-		partitionSizeLimit = connector.partitionSizeLimit
-		if partitionSizeLimit == 0 || connector.partitionIndex == -1 {
-			connector.RUnlock()
+		storage.RLock()
+		partitionSizeLimit = storage.partitionSizeLimit
+		if partitionSizeLimit == 0 || storage.partitionIndex == -1 {
+			storage.RUnlock()
 			continue
 		}
-		f = connector.partitions[connector.partitionIndex]
-		connector.RUnlock()
+		f = storage.partitions[storage.partitionIndex]
+		storage.RUnlock()
 
 		info, err := f.Stat()
 		basenine.Check(err)
 		currentSize := info.Size()
 		if currentSize > partitionSizeLimit {
 			// If we exceeded the half of the database size limit, create a new partition
-			f = connector.newPartition()
+			f = storage.newPartition()
 
 			// Safely access the partitions slice and partitionIndex
-			if connector.partitionIndex > 1 {
+			if storage.partitionIndex > 1 {
 				// Populate the truncatedTimestamp field, which symbolizes the new
 				// recording start time
 				var truncatedTimestamp int64
-				truncatedTimestamp, err = connector.getLastTimestampOfPartition(connector.partitionIndex - 2)
+				truncatedTimestamp, err = storage.getLastTimestampOfPartition(storage.partitionIndex - 2)
 				if err == nil {
-					connector.truncatedTimestamp = truncatedTimestamp + 1
+					storage.truncatedTimestamp = truncatedTimestamp + 1
 				}
 
-				connector.Lock()
+				storage.Lock()
 				// There can be only two living partition any given time.
 				// We've created the third partition, so discard the first one.
-				discarded := connector.partitions[connector.partitionIndex-2]
+				discarded := storage.partitions[storage.partitionIndex-2]
 				discarded.Close()
 				err = watcher.Remove(discarded.Name())
 				if err != nil {
 					log.Printf("Watch removal error: %v\n", err.Error())
 				}
 				os.Remove(discarded.Name())
-				connector.partitions[connector.partitionIndex-2] = nil
+				storage.partitions[storage.partitionIndex-2] = nil
 
 				if persistent {
 					// Dump the core in case of a partition removal
-					connector.DumpCore(true, true)
+					storage.DumpCore(true, true)
 				}
-				connector.Unlock()
+				storage.Unlock()
 			}
 		}
 	}
@@ -1064,7 +1064,7 @@ func (connector *nativeConnector) periodicPartitioner(ticker *time.Ticker) {
 
 // readRecord reads the record from the database paritition provided by argument f
 // and the reads the record by seeking to the offset provided by seek argument.
-func (connector *nativeConnector) readRecord(f *os.File, seek int64) (b []byte, n int64, err error) {
+func (storage *nativeStorage) readRecord(f *os.File, seek int64) (b []byte, n int64, err error) {
 	n = seek
 	l := make([]byte, 8)
 	_, err = io.ReadAtLeast(f, l, 8)
@@ -1087,7 +1087,7 @@ func (connector *nativeConnector) readRecord(f *os.File, seek int64) (b []byte, 
 }
 
 // Blocks until a partition is modified
-func (connector *nativeConnector) watchPartitions() (err error) {
+func (storage *nativeStorage) watchPartitions() (err error) {
 	select {
 	case event, ok := <-watcher.Events:
 		if !ok {
@@ -1106,12 +1106,12 @@ func (connector *nativeConnector) watchPartitions() (err error) {
 }
 
 // handleNegativeLeftOff handles negative leftOff value.
-func (connector *nativeConnector) handleNegativeLeftOff(_leftOff string) (leftOff int64, err error) {
+func (storage *nativeStorage) handleNegativeLeftOff(_leftOff string) (leftOff int64, err error) {
 	// If leftOff value is -1 then set it to last offset
 	if _leftOff == basenine.LATEST {
-		connector.RLock()
-		lastOffset := len(connector.offsets) - 1
-		connector.RUnlock()
+		storage.RLock()
+		lastOffset := len(storage.offsets) - 1
+		storage.RUnlock()
 		leftOff = int64(lastOffset)
 		if leftOff < 0 {
 			leftOff = 0
@@ -1126,21 +1126,21 @@ func (connector *nativeConnector) handleNegativeLeftOff(_leftOff string) (leftOf
 }
 
 // Safely access the offsets and partition references
-func (connector *nativeConnector) getOffsetAndPartition(index int) (offset int64, f *os.File, err error) {
-	connector.RLock()
-	offset = connector.offsets[index]
-	i := connector.partitionRefs[index]
-	fRef := connector.partitions[i]
+func (storage *nativeStorage) getOffsetAndPartition(index int) (offset int64, f *os.File, err error) {
+	storage.RLock()
+	offset = storage.offsets[index]
+	i := storage.partitionRefs[index]
+	fRef := storage.partitions[i]
 	if fRef == nil {
 		err = errors.New("Read on not opened partition")
 	} else {
 		f, err = os.Open(fRef.Name())
 	}
-	connector.RUnlock()
+	storage.RUnlock()
 	return
 }
 
-func (connector *nativeConnector) rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
+func (storage *nativeStorage) rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
 	startIndex := len(offsetQueue) - int(rlimit)
 	if startIndex < 0 {
 		startIndex = 0
@@ -1150,9 +1150,9 @@ func (connector *nativeConnector) rlimitWrite(conn net.Conn, f *os.File, rlimit 
 	for i, offset := range offsetQueue {
 		partitionRef := partitionRefQueue[i]
 
-		connector.RLock()
-		fRef := connector.partitions[partitionRef]
-		connector.RUnlock()
+		storage.RLock()
+		fRef := storage.partitions[partitionRef]
+		storage.RUnlock()
 
 		// File descriptor nil means; the partition is removed. So we pass this offset.
 		if fRef == nil {
@@ -1181,7 +1181,7 @@ func (connector *nativeConnector) rlimitWrite(conn net.Conn, f *os.File, rlimit 
 
 		// Read the record into b
 		var b []byte
-		b, _, err = connector.readRecord(f, offset)
+		b, _, err = storage.readRecord(f, offset)
 
 		// Even if it's EOF, continue.
 		// Because a later offset might point to a previous region of the file.
@@ -1201,8 +1201,8 @@ func (connector *nativeConnector) rlimitWrite(conn net.Conn, f *os.File, rlimit 
 }
 
 // removeAllWatchers removes all the watchers that are watching the database files.
-func (connector *nativeConnector) removeAllWatchers() {
-	for _, partition := range connector.partitions {
+func (storage *nativeStorage) removeAllWatchers() {
+	for _, partition := range storage.partitions {
 		if partition == nil {
 			continue
 		}

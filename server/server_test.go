@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	basenine "github.com/up9inc/basenine/server/lib"
-	"github.com/up9inc/basenine/server/lib/connectors"
+	"github.com/up9inc/basenine/server/lib/storages"
 )
 
 func TestServerConnCheck(t *testing.T) {
@@ -28,7 +28,7 @@ func TestServerConnCheck(t *testing.T) {
 }
 
 func TestServerProtocolInsertMode(t *testing.T) {
-	connector = connectors.NewNativeConnector(false)
+	storage = storages.NewNativeStorage(false)
 
 	server, client := net.Pipe()
 	go handleConnection(server)
@@ -49,7 +49,7 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	// expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 
 	// // Safely acces the offsets and partition references
-	// n, rf, err := connector.GetOffsetAndPartition(index)
+	// n, rf, err := storage.GetOffsetAndPartition(index)
 	// assert.Nil(t, err)
 
 	// rf.Seek(n, io.SeekStart)
@@ -63,7 +63,7 @@ func TestServerProtocolInsertMode(t *testing.T) {
 	client.Close()
 	server.Close()
 
-	connector.Reset()
+	storage.Reset()
 
 	time.Sleep(500 * time.Millisecond)
 }
@@ -73,7 +73,7 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 	insertionFilter := `brand.name == "Chevrolet" and redact("year")`
 	query := `brand.name == "Chevrolet"`
 
-	connector = connectors.NewNativeConnector(false)
+	storage = storages.NewNativeStorage(false)
 
 	server, client := net.Pipe()
 	go handleConnection(server)
@@ -93,7 +93,7 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 	go handleConnection(server)
 
 	for index := 0; index < 100; index++ {
-		connector.InsertData([]byte(payload))
+		storage.InsertData([]byte(payload))
 	}
 
 	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
@@ -140,7 +140,7 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 		client.Close()
 		server.Close()
 
-		connector.Reset()
+		storage.Reset()
 	}
 }
 
@@ -162,7 +162,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 	for _, row := range testServerProtocolQueryModeData {
 		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
-		connector = connectors.NewNativeConnector(false)
+		storage = storages.NewNativeStorage(false)
 
 		server, client := net.Pipe()
 		go handleConnection(server)
@@ -170,7 +170,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 		total := 100
 
 		for index := 0; index < total; index++ {
-			connector.InsertData([]byte(payload))
+			storage.InsertData([]byte(payload))
 		}
 
 		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
@@ -217,7 +217,7 @@ func TestServerProtocolQueryMode(t *testing.T) {
 			client.Close()
 			server.Close()
 
-			connector.Reset()
+			storage.Reset()
 		}
 	}
 }
@@ -226,13 +226,13 @@ func TestServerProtocolSingleMode(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	id := 42
 
-	connector = connectors.NewNativeConnector(false)
+	storage = storages.NewNativeStorage(false)
 
 	server, client := net.Pipe()
 	go handleConnection(server)
 
 	for index := 0; index < 100; index++ {
-		connector.InsertData([]byte(payload))
+		storage.InsertData([]byte(payload))
 	}
 
 	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
@@ -277,7 +277,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 		client.Close()
 		server.Close()
 
-		connector.Reset()
+		storage.Reset()
 	}
 }
 
@@ -292,7 +292,7 @@ var validateModeData = []struct {
 
 func TestServerProtocolValidateMode(t *testing.T) {
 	for _, row := range validateModeData {
-		connector = connectors.NewNativeConnector(false)
+		storage = storages.NewNativeStorage(false)
 
 		server, client := net.Pipe()
 		go handleConnection(server)
@@ -335,7 +335,7 @@ func TestServerProtocolValidateMode(t *testing.T) {
 			client.Close()
 			server.Close()
 
-			connector.Reset()
+			storage.Reset()
 		}
 	}
 }
@@ -345,7 +345,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	macro := `chevy~brand.name == "Chevrolet"`
 	query := `chevy`
 
-	connector = connectors.NewNativeConnector(false)
+	storage = storages.NewNativeStorage(false)
 
 	server, client := net.Pipe()
 	go handleConnection(server)
@@ -363,7 +363,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	go handleConnection(server)
 
 	for index := 0; index < 100; index++ {
-		connector.InsertData([]byte(payload))
+		storage.InsertData([]byte(payload))
 	}
 
 	readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
@@ -410,7 +410,7 @@ func TestServerProtocolMacroMode(t *testing.T) {
 		client.Close()
 		server.Close()
 
-		connector.Reset()
+		storage.Reset()
 	}
 }
 
@@ -435,7 +435,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 	for _, row := range testServerProtocolFetchModeData {
 		payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
-		connector = connectors.NewNativeConnector(false)
+		storage = storages.NewNativeStorage(false)
 
 		server, client := net.Pipe()
 		go handleConnection(server)
@@ -443,7 +443,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 		total := 100
 
 		for index := 0; index < total; index++ {
-			connector.InsertData([]byte(payload))
+			storage.InsertData([]byte(payload))
 		}
 
 		readConnection := func(wg *sync.WaitGroup, conn net.Conn) {
@@ -514,7 +514,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 			client.Close()
 			server.Close()
 
-			connector.Reset()
+			storage.Reset()
 		}
 	}
 }
@@ -523,7 +523,7 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	limit := int64(1000000) // 1MB
 
-	connector = connectors.NewNativeConnector(false)
+	storage = storages.NewNativeStorage(false)
 
 	server, client := net.Pipe()
 	go handleConnection(server)
@@ -569,7 +569,7 @@ func TestServerProtocolLimitMode(t *testing.T) {
 	client.Close()
 	server.Close()
 
-	connector.Reset()
+	storage.Reset()
 }
 
 func TestServerProtocolFlushMode(t *testing.T) {
