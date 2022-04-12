@@ -126,7 +126,7 @@ func NewNativeStorage(persistent bool) (storage basenine.Storage) {
 }
 
 // Init initializes the storage
-func (storage *nativeStorage) Init(persistent bool) {
+func (storage *nativeStorage) Init(persistent bool) (err error) {
 	// Rename the legacy database files
 	storage.renameLegacyDatabaseFiles()
 
@@ -148,6 +148,7 @@ func (storage *nativeStorage) Init(persistent bool) {
 	// Trigger partitioning check for every second.
 	ticker := time.NewTicker(1 * time.Second)
 	go storage.periodicPartitioner(persistent, ticker)
+	return
 }
 
 // DumpCore dumps the core into a file named "basenine.gob"
@@ -260,7 +261,7 @@ func (storage *nativeStorage) RestoreCore() (err error) {
 // index of that record.
 // Then marshals that map back and safely writes the bytes into
 // the current database partitition.
-func (storage *nativeStorage) InsertData(data []byte) {
+func (storage *nativeStorage) InsertData(data []byte) (err error) {
 	// partitionIndex -1 means there are not partitions created yet
 	// Safely access the current partition index
 	storage.RLock()
@@ -276,8 +277,12 @@ func (storage *nativeStorage) InsertData(data []byte) {
 	insertionFilterExpr := storage.insertionFilterExpr
 	storage.RUnlock()
 	if len(insertionFilter) > 0 {
-		truth, record, err := basenine.Eval(insertionFilterExpr, string(data))
-		basenine.Check(err)
+		var truth bool
+		var record string
+		truth, record, err = basenine.Eval(insertionFilterExpr, string(data))
+		if err != nil {
+			return
+		}
 		if !truth {
 			return
 		}
@@ -285,7 +290,7 @@ func (storage *nativeStorage) InsertData(data []byte) {
 	}
 
 	var d map[string]interface{}
-	if err := json.Unmarshal(data, &d); err != nil {
+	if err = json.Unmarshal(data, &d); err != nil {
 		return
 	}
 
@@ -321,8 +326,8 @@ func (storage *nativeStorage) InsertData(data []byte) {
 	// Write the record into database immediately after the last record.
 	// The offset is tracked by lastOffset which is storage.lastOffset
 	// WriteAt() is important here! Write() races.
-	_, err := f.WriteAt(data, lastOffset)
-	basenine.Check(err)
+	_, err = f.WriteAt(data, lastOffset)
+	return
 }
 
 // PrepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
@@ -575,14 +580,16 @@ func (storage *nativeStorage) RetrieveSingle(conn net.Conn, index string, query 
 
 // ValidateQuery tries to parse the given query and checks if there are
 // any syntax errors or not.
-func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) {
+func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) (err error) {
 	query := string(data)
 	// Expand all macros in the query, if there are any.
 	storage.RLock()
 	macros := storage.macros
 	storage.RUnlock()
-	query, err := basenine.ExpandMacros(macros, query)
-	basenine.Check(err)
+	query, err = basenine.ExpandMacros(macros, query)
+	if err != nil {
+		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
+	}
 	_, err = basenine.Parse(query)
 
 	if err == nil {
@@ -590,23 +597,28 @@ func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) {
 	} else {
 		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
 	}
+	return
 }
 
 // Fetch fetches records in prefered direction, starting from leftOff up to given limit
-func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction string, query string, limit string) {
+func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction string, query string, limit string) (err error) {
 	// Parse the arguments
-	_leftOff, err := storage.handleNegativeLeftOff(leftOff)
+	var _leftOff int64
+	_leftOff, err = storage.handleNegativeLeftOff(leftOff)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: Cannot parse leftOff value to int: %s\n", err.Error())))
 		return
 	}
 
-	_direction, err := strconv.Atoi(direction)
+	var _direction int
+	_direction, err = strconv.Atoi(direction)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the direction to integer: %s\n", err.Error())))
 		return
 	}
-	_limit, err := strconv.Atoi(limit)
+
+	var _limit int
+	_limit, err = strconv.Atoi(limit)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: While converting the limit to integer: %s\n", err.Error())))
 		return
@@ -632,7 +644,8 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 	}
 
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
-	expr, _, err := storage.PrepareQuery(query)
+	var expr *basenine.Expression
+	expr, _, err = storage.PrepareQuery(query)
 	if err != nil {
 		conn.Close()
 	}
@@ -777,10 +790,11 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 			numberOfWritten++
 		}
 	}
+	return
 }
 
 // ApplyMacro defines a macro that will be expanded for each individual query.
-func (storage *nativeStorage) ApplyMacro(conn net.Conn, data []byte) {
+func (storage *nativeStorage) ApplyMacro(conn net.Conn, data []byte) (err error) {
 	str := string(data)
 
 	s := strings.Split(str, "~")
@@ -798,10 +812,11 @@ func (storage *nativeStorage) ApplyMacro(conn net.Conn, data []byte) {
 	storage.Unlock()
 
 	basenine.SendOK(conn)
+	return
 }
 
 // SetLimit sets a limit for the maximum database size.
-func (storage *nativeStorage) SetLimit(conn net.Conn, data []byte) {
+func (storage *nativeStorage) SetLimit(conn net.Conn, data []byte) (err error) {
 	value, err := strconv.Atoi(string(data))
 
 	if err != nil {
@@ -814,10 +829,11 @@ func (storage *nativeStorage) SetLimit(conn net.Conn, data []byte) {
 	storage.Unlock()
 
 	basenine.SendOK(conn)
+	return
 }
 
 // SetInsertionFilter tries to set the given query as an insertion filter
-func (storage *nativeStorage) SetInsertionFilter(conn net.Conn, data []byte) {
+func (storage *nativeStorage) SetInsertionFilter(conn net.Conn, data []byte) (err error) {
 	query := string(data)
 
 	insertionFilterExpr, _, err := storage.PrepareQuery(query)
@@ -831,10 +847,11 @@ func (storage *nativeStorage) SetInsertionFilter(conn net.Conn, data []byte) {
 	} else {
 		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
 	}
+	return
 }
 
 // Flush removes all the records in the database.
-func (storage *nativeStorage) Flush() {
+func (storage *nativeStorage) Flush() (err error) {
 	storage.Lock()
 	storage.removeAllWatchers()
 	storage.lastOffset = 0
@@ -849,11 +866,12 @@ func (storage *nativeStorage) Flush() {
 	storage.DumpCore(true, true)
 	storage.Unlock()
 	storage.newPartition()
+	return
 }
 
 // Reset removes all the records in the database and
 // resets the core's state into its initial form.
-func (storage *nativeStorage) Reset() {
+func (storage *nativeStorage) Reset() (err error) {
 	storage.Lock()
 	storage.removeAllWatchers()
 	storage.version = basenine.VERSION
@@ -872,10 +890,11 @@ func (storage *nativeStorage) Reset() {
 	storage.DumpCore(true, true)
 	storage.Unlock()
 	storage.newPartition()
+	return
 }
 
 // HandleExit gracefully exists the server accordingly. Dumps core if "-persistent" enabled.
-func (storage *nativeStorage) HandleExit(sig syscall.Signal, persistent bool) {
+func (storage *nativeStorage) HandleExit(sig syscall.Signal, persistent bool) (err error) {
 	storage.watcher.Close()
 
 	// 128: killed by a signal and dumped core
@@ -890,6 +909,7 @@ func (storage *nativeStorage) HandleExit(sig syscall.Signal, persistent bool) {
 	storage.DumpCore(false, false)
 
 	os.Exit(exitCode)
+	return
 }
 
 // newPartition crates a new database paritition. The filename format is data_000000000.db

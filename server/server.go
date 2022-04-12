@@ -70,7 +70,8 @@ func main() {
 	go func() {
 		sig := <-c
 		quitConnections()
-		storage.HandleExit(sig.(syscall.Signal), *persistent)
+		err = storage.HandleExit(sig.(syscall.Signal), *persistent)
+		basenine.Check(err)
 	}()
 
 	// Start accepting TCP connections.
@@ -112,13 +113,14 @@ func handleConnection(conn net.Conn) {
 	// Arguments for the FETCH command (leftOff, direction, query, limit)
 	var fetchArgs []string
 
+	var err error
 	for {
 		// Scan the input
 		ok := scanner.Scan()
 
 		if !ok {
 			if *debug {
-				err := scanner.Err()
+				err = scanner.Err()
 				log.Printf("Scanning error: %v\n", err)
 			}
 			break
@@ -133,44 +135,63 @@ func handleConnection(conn net.Conn) {
 			mode = _mode
 			switch mode {
 			case basenine.FLUSH:
-				storage.Flush()
-				basenine.SendOK(conn)
+				err = storage.Flush()
+				basenine.SendErr(conn, err)
+				if err == nil {
+					basenine.SendOK(conn)
+				}
 			case basenine.RESET:
-				storage.Reset()
-				basenine.SendOK(conn)
+				err = storage.Reset()
+				basenine.SendErr(conn, err)
+				if err == nil {
+					basenine.SendOK(conn)
+				}
 			}
 		case basenine.INSERT:
-			storage.InsertData(data)
+			err = storage.InsertData(data)
 		case basenine.INSERTION_FILTER:
-			storage.SetInsertionFilter(conn, data)
+			err = storage.SetInsertionFilter(conn, data)
+			basenine.SendErr(conn, err)
 		case basenine.QUERY:
-			storage.StreamRecords(conn, data)
+			err = storage.StreamRecords(conn, data)
 		case basenine.SINGLE:
 			if len(singleArgs) < 2 {
 				singleArgs = append(singleArgs, string(data))
 			}
 			if len(singleArgs) == 2 {
-				storage.RetrieveSingle(conn, singleArgs[0], singleArgs[1])
+				err = storage.RetrieveSingle(conn, singleArgs[0], singleArgs[1])
 			}
 		case basenine.FETCH:
 			if len(fetchArgs) < 4 {
 				fetchArgs = append(fetchArgs, string(data))
 			}
 			if len(fetchArgs) == 4 {
-				storage.Fetch(conn, fetchArgs[0], fetchArgs[1], fetchArgs[2], fetchArgs[3])
+				err = storage.Fetch(conn, fetchArgs[0], fetchArgs[1], fetchArgs[2], fetchArgs[3])
 			}
 		case basenine.VALIDATE:
-			storage.ValidateQuery(conn, data)
+			err = storage.ValidateQuery(conn, data)
 		case basenine.MACRO:
-			storage.ApplyMacro(conn, data)
+			err = storage.ApplyMacro(conn, data)
+			basenine.SendErr(conn, err)
 		case basenine.LIMIT:
-			storage.SetLimit(conn, data)
+			err = storage.SetLimit(conn, data)
+			basenine.SendErr(conn, err)
 		case basenine.FLUSH:
-			storage.Flush()
-			basenine.SendOK(conn)
+			err = storage.Flush()
+			basenine.SendErr(conn, err)
+			if err == nil {
+				basenine.SendOK(conn)
+			}
 		case basenine.RESET:
-			storage.Reset()
-			basenine.SendOK(conn)
+			err = storage.Reset()
+			basenine.SendErr(conn, err)
+			if err == nil {
+				basenine.SendOK(conn)
+			}
+		}
+
+		if err != nil {
+			break
 		}
 	}
 
@@ -186,7 +207,7 @@ func handleConnection(conn net.Conn) {
 // in case of an interruption.
 func quitConnections() {
 	for _, conn := range connections {
-		conn.Write([]byte(fmt.Sprintf("%s\n", basenine.CloseConnection)))
+		basenine.SendClose(conn)
 	}
 }
 

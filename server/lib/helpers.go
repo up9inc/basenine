@@ -17,7 +17,21 @@ func IndexToID(index int) string {
 }
 
 func SendOK(conn net.Conn) {
-	conn.Write([]byte(fmt.Sprintf("OK\n")))
+	SendMsg(conn, "OK")
+}
+
+func SendErr(conn net.Conn, err error) {
+	if err != nil {
+		SendMsg(conn, err.Error())
+	}
+}
+
+func SendClose(conn net.Conn) {
+	SendMsg(conn, CloseConnection)
+}
+
+func SendMsg(conn net.Conn, msg string) {
+	conn.Write([]byte(fmt.Sprintf("%s\n", msg)))
 }
 
 // POSIX compliant method for checking whether connection was closed by the peer or not
