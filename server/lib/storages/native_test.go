@@ -11,7 +11,7 @@ import (
 	basenine "github.com/up9inc/basenine/server/lib"
 )
 
-func TestServerNewPartition(t *testing.T) {
+func TestNativeStorageNewPartition(t *testing.T) {
 	storage := NewNativeStorage(false).(*nativeStorage)
 
 	f := storage.newPartition()
@@ -19,7 +19,7 @@ func TestServerNewPartition(t *testing.T) {
 	assert.FileExists(t, fmt.Sprintf("%s_%09d.%s", NATIVE_STORAGE_DB_FILE, storage.partitionIndex, NATIVE_STORAGE_DB_FILE_EXT))
 }
 
-func TestServerDumpRestoreCore(t *testing.T) {
+func TestNativeStorageDumpRestoreCore(t *testing.T) {
 	storage := NewNativeStorage(false).(*nativeStorage)
 
 	err := storage.DumpCore(false, false)
@@ -31,7 +31,7 @@ func TestServerDumpRestoreCore(t *testing.T) {
 	storage.removeDatabaseFiles()
 }
 
-func TestServerInsertAndReadData(t *testing.T) {
+func TestNativeStorageInsertAndReadData(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
 	storage := NewNativeStorage(false).(*nativeStorage)
@@ -57,7 +57,7 @@ func TestServerInsertAndReadData(t *testing.T) {
 	storage.removeDatabaseFiles()
 }
 
-func TestServerSetPartitionSizeLimit(t *testing.T) {
+func TestNativeStorageSetPartitionSizeLimit(t *testing.T) {
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 	limit := 1000000 // 1MB
 
@@ -88,7 +88,7 @@ func TestServerSetPartitionSizeLimit(t *testing.T) {
 	storage.Reset()
 }
 
-func TestServerFlush(t *testing.T) {
+func TestNativeStorageFlush(t *testing.T) {
 	storage := NewNativeStorage(false).(*nativeStorage)
 
 	insertionFilter := "model"
@@ -125,7 +125,7 @@ func TestServerFlush(t *testing.T) {
 	storage.RUnlock()
 }
 
-func TestServerReset(t *testing.T) {
+func TestNativeStorageReset(t *testing.T) {
 	storage := NewNativeStorage(false).(*nativeStorage)
 
 	insertionFilter := "model"
