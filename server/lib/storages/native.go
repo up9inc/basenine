@@ -222,6 +222,7 @@ func (storage *nativeStorage) RestoreCore() (err error) {
 		return
 	}
 
+	storage.Lock()
 	storage.version = basenine.VERSION
 	storage.lastOffset = csExport.LastOffset
 	storage.partitionRefs = csExport.PartitionRefs
@@ -249,7 +250,8 @@ func (storage *nativeStorage) RestoreCore() (err error) {
 	storage.removedOffsetsCounter = csExport.RemovedOffsetsCounter
 	storage.macros = csExport.Macros
 	storage.insertionFilter = csExport.InsertionFilter
-	storage.insertionFilterExpr, _, _ = storage.PrepareQuery(storage.insertionFilter)
+	storage.insertionFilterExpr, _, _ = storage.PrepareQuery(storage.insertionFilter, csExport.Macros)
+	storage.Unlock()
 
 	log.Printf("Restored the core from: %s\n", nativeStorageCoreDumpFilename)
 	return
@@ -330,12 +332,17 @@ func (storage *nativeStorage) InsertData(data []byte) (err error) {
 	return
 }
 
-// PrepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
-func (storage *nativeStorage) PrepareQuery(query string) (expr *basenine.Expression, prop basenine.Propagate, err error) {
-	// Expand all macros in the query, if there are any.
+// GetMacros returns registered macros in the form a map of strings.
+func (storage *nativeStorage) GetMacros() (macros map[string]string, err error) {
 	storage.RLock()
-	macros := storage.macros
+	macros = storage.macros
 	storage.RUnlock()
+	return
+}
+
+// PrepareQuery get the query as an argument and handles expansion, parsing and compile-time evaluations.
+func (storage *nativeStorage) PrepareQuery(query string, macros map[string]string) (expr *basenine.Expression, prop basenine.Propagate, err error) {
+	// Expand all macros in the query, if there are any.
 	query, err = basenine.ExpandMacros(macros, query)
 	basenine.Check(err)
 
@@ -361,11 +368,21 @@ func (storage *nativeStorage) PrepareQuery(query string) (expr *basenine.Express
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
 func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err error) {
-	expr, prop, err := storage.PrepareQuery(string(data))
+	var macros map[string]string
+	macros, err = storage.GetMacros()
 	if err != nil {
 		conn.Close()
 		return
 	}
+
+	var expr *basenine.Expression
+	var prop basenine.Propagate
+	expr, prop, err = storage.PrepareQuery(string(data), macros)
+	if err != nil {
+		conn.Close()
+		return
+	}
+
 	limit := prop.Limit
 	rlimit := prop.Rlimit
 	_leftOff := prop.LeftOff
@@ -565,8 +582,14 @@ func (storage *nativeStorage) RetrieveSingle(conn net.Conn, index string, query 
 	b, _, err = storage.readRecord(f, n)
 	f.Close()
 
+	macros, err := storage.GetMacros()
+	if err != nil {
+		conn.Close()
+		return
+	}
+
 	// Callling `Eval` for record altering helpers like `redact`
-	expr, _, err := storage.PrepareQuery(query)
+	expr, _, err := storage.PrepareQuery(query, macros)
 	if err != nil {
 		conn.Close()
 		return
@@ -643,9 +666,15 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 		return
 	}
 
+	macros, err := storage.GetMacros()
+	if err != nil {
+		conn.Close()
+		return
+	}
+
 	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
 	var expr *basenine.Expression
-	expr, _, err = storage.PrepareQuery(query)
+	expr, _, err = storage.PrepareQuery(query, macros)
 	if err != nil {
 		conn.Close()
 	}
@@ -824,9 +853,7 @@ func (storage *nativeStorage) SetLimit(conn net.Conn, data []byte) (err error) {
 		return
 	}
 
-	storage.Lock()
-	storage.partitionSizeLimit = int64(value) / 2
-	storage.Unlock()
+	storage.setPartitionSizeLimit(value)
 
 	basenine.SendOK(conn)
 	return
@@ -836,7 +863,12 @@ func (storage *nativeStorage) SetLimit(conn net.Conn, data []byte) (err error) {
 func (storage *nativeStorage) SetInsertionFilter(conn net.Conn, data []byte) (err error) {
 	query := string(data)
 
-	insertionFilterExpr, _, err := storage.PrepareQuery(query)
+	macros, err := storage.GetMacros()
+	if err != nil {
+		return
+	}
+
+	insertionFilterExpr, _, err := storage.PrepareQuery(query, macros)
 
 	if err == nil {
 		storage.Lock()
@@ -844,8 +876,6 @@ func (storage *nativeStorage) SetInsertionFilter(conn net.Conn, data []byte) (er
 		storage.insertionFilterExpr = insertionFilterExpr
 		storage.Unlock()
 		basenine.SendOK(conn)
-	} else {
-		conn.Write([]byte(fmt.Sprintf("%s\n", err.Error())))
 	}
 	return
 }
@@ -1218,4 +1248,11 @@ func (storage *nativeStorage) removeAllWatchers() {
 			log.Printf("Watch removal error: %v\n", err.Error())
 		}
 	}
+}
+
+// setPartitionSizeLimit sets the partition size limit to the half of the given value.
+func (storage *nativeStorage) setPartitionSizeLimit(value int) {
+	storage.Lock()
+	storage.partitionSizeLimit = int64(value) / 2
+	storage.Unlock()
 }

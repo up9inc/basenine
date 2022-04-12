@@ -3,7 +3,9 @@ package storages
 import (
 	"fmt"
 	"io"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	basenine "github.com/up9inc/basenine/server/lib"
@@ -34,9 +36,6 @@ func TestServerInsertAndReadData(t *testing.T) {
 
 	storage := NewNativeStorage(false).(*nativeStorage)
 
-	f := storage.newPartition()
-	assert.NotNil(t, f)
-
 	for index := 0; index < 100; index++ {
 		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 
@@ -58,13 +57,44 @@ func TestServerInsertAndReadData(t *testing.T) {
 	storage.removeDatabaseFiles()
 }
 
+func TestServerSetPartitionSizeLimit(t *testing.T) {
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+	limit := 1000000 // 1MB
+
+	storage := NewNativeStorage(false).(*nativeStorage)
+
+	storage.setPartitionSizeLimit(limit)
+
+	for index := 0; index < 15000; index++ {
+		storage.InsertData([]byte(payload))
+		time.Sleep(500 * time.Microsecond)
+	}
+
+	var lastFile, secondLastFile *os.File
+
+	storage.RLock()
+	lastFile = storage.partitions[storage.partitionIndex]
+	secondLastFile = storage.partitions[storage.partitionIndex-1]
+	storage.RUnlock()
+
+	lastFileInfo, err := lastFile.Stat()
+	assert.Nil(t, err)
+	secondLastFileInfo, err := secondLastFile.Stat()
+	assert.Nil(t, err)
+
+	assert.Less(t, lastFileInfo.Size(), int64(limit))
+	assert.Less(t, secondLastFileInfo.Size(), int64(limit))
+
+	storage.Reset()
+}
+
 func TestServerFlush(t *testing.T) {
 	storage := NewNativeStorage(false).(*nativeStorage)
 
 	insertionFilter := "model"
-	insertionFilterExpr, _, err := storage.PrepareQuery(insertionFilter)
-	assert.Nil(t, err)
 	macros := map[string]string{"foo": "bar"}
+	insertionFilterExpr, _, err := storage.PrepareQuery(insertionFilter, macros)
+	assert.Nil(t, err)
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
 	storage.Lock()
@@ -99,9 +129,9 @@ func TestServerReset(t *testing.T) {
 	storage := NewNativeStorage(false).(*nativeStorage)
 
 	insertionFilter := "model"
-	insertionFilterExpr, _, err := storage.PrepareQuery(insertionFilter)
-	assert.Nil(t, err)
 	macros := map[string]string{"foo": "bar"}
+	insertionFilterExpr, _, err := storage.PrepareQuery(insertionFilter, macros)
+	assert.Nil(t, err)
 	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
 
 	storage.Lock()

@@ -44,22 +44,6 @@ func TestServerProtocolInsertMode(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	// TODO: Revive the commented the out section
-	// index := 0
-	// expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
-
-	// // Safely acces the offsets and partition references
-	// n, rf, err := storage.GetOffsetAndPartition(index)
-	// assert.Nil(t, err)
-
-	// rf.Seek(n, io.SeekStart)
-	// b, n, err := readRecord(rf, n)
-	// assert.Nil(t, err)
-	// assert.Greater(t, n, int64(0))
-	// assert.JSONEq(t, expected, string(b))
-
-	// rf.Close()
-
 	client.Close()
 	server.Close()
 
@@ -549,22 +533,6 @@ func TestServerProtocolLimitMode(t *testing.T) {
 		client.Write([]byte("\n"))
 		time.Sleep(500 * time.Microsecond)
 	}
-
-	// TODO: Revive the commented the out section
-	// var lastFile, secondLastFile *os.File
-
-	// cs.RLock()
-	// lastFile = cs.partitions[cs.partitionIndex]
-	// secondLastFile = cs.partitions[cs.partitionIndex-1]
-	// cs.RUnlock()
-
-	// lastFileInfo, err := lastFile.Stat()
-	// assert.Nil(t, err)
-	// secondLastFileInfo, err := secondLastFile.Stat()
-	// assert.Nil(t, err)
-
-	// assert.Less(t, lastFileInfo.Size(), limit)
-	// assert.Less(t, secondLastFileInfo.Size(), limit)
 
 	client.Close()
 	server.Close()
