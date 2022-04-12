@@ -35,6 +35,8 @@ var port = flag.Int("port", 9099, "The port to listen on.")
 var debug = flag.Bool("debug", false, "Enable debug logs.")
 var version = flag.Bool("version", false, "Print version and exit.")
 var persistent = flag.Bool("persistent", false, "Enable persistent mode. Dumps core on exit.")
+var storageDriver = flag.String("storage", "native", "The storage driver for saving the records; default is \"native\" (.db files in pwd).")
+var storageArgs = flag.String("storage-args", "", "Arguments for the storage driver.")
 
 var storage basenine.Storage
 
@@ -52,7 +54,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	storage = storages.NewNativeStorage(*persistent)
+	switch *storageDriver {
+	case "native":
+		storage = storages.NewNativeStorage(*persistent)
+	default:
+		log.Panicf("Unknown storage driver: %s", *storageDriver)
+	}
 
 	// Start listenning to given address and port.
 	src := *addr + ":" + strconv.Itoa(*port)
