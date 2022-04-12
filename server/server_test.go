@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"regexp"
@@ -16,16 +15,6 @@ import (
 	basenine "github.com/up9inc/basenine/server/lib"
 	"github.com/up9inc/basenine/server/lib/storages"
 )
-
-func TestServerConnCheck(t *testing.T) {
-	server, client := net.Pipe()
-	assert.Nil(t, basenine.ConnCheck(client))
-	assert.Nil(t, basenine.ConnCheck(server))
-	client.Close()
-	assert.Equal(t, io.ErrClosedPipe, basenine.ConnCheck(client))
-	server.Close()
-	assert.Equal(t, io.ErrClosedPipe, basenine.ConnCheck(server))
-}
 
 func TestServerProtocolInsertMode(t *testing.T) {
 	storage = storages.NewNativeStorage(false)
