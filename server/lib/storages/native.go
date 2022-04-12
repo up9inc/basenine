@@ -384,7 +384,6 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 	}
 
 	limit := prop.Limit
-	rlimit := prop.Rlimit
 	_leftOff := prop.LeftOff
 
 	leftOff, err := storage.handleNegativeLeftOff(_leftOff, 1)
@@ -394,14 +393,6 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 
 	// Number of written records to the TCP connection.
 	var numberOfWritten uint64 = 0
-
-	// The queues for rlimit helper.
-	var rlimitOffsetQueue []int64
-	var rlimitPartitionRefQueue []int64
-	if rlimit > 0 {
-		rlimitOffsetQueue = make([]int64, 0)
-		rlimitPartitionRefQueue = make([]int64, 0)
-	}
 
 	// Number of queried records
 	var queried uint64 = 0
@@ -430,11 +421,6 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 		truncatedTimestamp := storage.truncatedTimestamp
 		removedOffsetsCounter = storage.removedOffsetsCounter
 		storage.RUnlock()
-
-		// Disable rlimit if it's bigger than the total records.
-		if rlimit > 0 && int(rlimit) >= len(subOffsets) {
-			rlimit = 0
-		}
 
 		var metadata *basenine.Metadata
 
@@ -493,17 +479,12 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 
 			// Write the record into TCP connection if it passes the query.
 			if truth {
-				if rlimit > 0 {
-					rlimitOffsetQueue = append(rlimitOffsetQueue, offset)
-					rlimitPartitionRefQueue = append(rlimitPartitionRefQueue, partitionRef)
-				} else {
-					_, err := conn.Write([]byte(fmt.Sprintf("%s\n", record)))
-					if err != nil {
-						log.Printf("Write error: %v\n", err)
-						break
-					}
-					numberOfWritten++
+				_, err := conn.Write([]byte(fmt.Sprintf("%s\n", record)))
+				if err != nil {
+					log.Printf("Write error: %v\n", err)
+					break
 				}
+				numberOfWritten++
 			}
 
 			// Correct the metadata values by subtracting removedOffsetsCounter
@@ -530,11 +511,6 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 			if limit != 0 && numberOfWritten >= limit {
 				return nil
 			}
-		}
-
-		if rlimit > 0 {
-			numberOfWritten, err = storage.rlimitWrite(conn, f, rlimit, rlimitOffsetQueue, rlimitPartitionRefQueue, numberOfWritten)
-			rlimit = 0
 		}
 
 		// Block until a partition is modified
@@ -672,7 +648,7 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 		return
 	}
 
-	// `limit`, `rlimit` and `leftOff` helpers are not effective in `FETCH` connection mode
+	// `limit`, and `leftOff` helpers are not effective in `FETCH` connection mode
 	var expr *basenine.Expression
 	expr, _, err = storage.PrepareQuery(query, macros)
 	if err != nil {
@@ -1175,66 +1151,6 @@ func (storage *nativeStorage) getOffsetAndPartition(index int) (offset int64, f 
 		f, err = os.Open(fRef.Name())
 	}
 	storage.RUnlock()
-	return
-}
-
-func (storage *nativeStorage) rlimitWrite(conn net.Conn, f *os.File, rlimit uint64, offsetQueue []int64, partitionRefQueue []int64, numberOfWritten uint64) (numberOfWrittenNew uint64, err error) {
-	startIndex := len(offsetQueue) - int(rlimit)
-	if startIndex < 0 {
-		startIndex = 0
-	}
-	offsetQueue = offsetQueue[startIndex:]
-	partitionRefQueue = partitionRefQueue[startIndex:]
-	for i, offset := range offsetQueue {
-		partitionRef := partitionRefQueue[i]
-
-		storage.RLock()
-		fRef := storage.partitions[partitionRef]
-		storage.RUnlock()
-
-		// File descriptor nil means; the partition is removed. So we pass this offset.
-		if fRef == nil {
-			continue
-		}
-
-		// f == nil means we didn't open any partition yet.
-		// fRef.Name() != f.Name() means we're switching to the next partition.
-		if f == nil || fRef.Name() != f.Name() {
-			if f != nil && fRef.Name() != f.Name() {
-				// We're switching to the next partition, close the current partition.
-				f.Close()
-			}
-
-			// Open the partition that the current offset refers to.
-			f, err = os.Open(fRef.Name())
-
-			// If the file cannot be opened, pass.
-			if err != nil {
-				continue
-			}
-		}
-
-		// Seek to the offset
-		f.Seek(offset, io.SeekStart)
-
-		// Read the record into b
-		var b []byte
-		b, _, err = storage.readRecord(f, offset)
-
-		// Even if it's EOF, continue.
-		// Because a later offset might point to a previous region of the file.
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			continue
-		}
-
-		_, err := conn.Write([]byte(fmt.Sprintf("%s\n", b)))
-		if err != nil {
-			log.Printf("Write error: %v\n", err)
-			break
-		}
-		numberOfWritten++
-	}
-	numberOfWrittenNew = numberOfWritten
 	return
 }
 
