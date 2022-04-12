@@ -3,7 +3,10 @@ package storages
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
+	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,7 +57,151 @@ func TestNativeStorageInsertAndReadData(t *testing.T) {
 		rf.Close()
 	}
 
+	storage.Reset()
+}
+
+func TestNativeStorageMacros(t *testing.T) {
+	key := `chevy`
+	value := `brand.name == "Chevrolet"`
+	macro := fmt.Sprintf(`%s~%s`, key, value)
+
+	storage := NewNativeStorage(false).(*nativeStorage)
+
+	server, client := net.Pipe()
+	go func() {
+		storage.ApplyMacro(server, []byte(macro))
+		macros, err := storage.GetMacros()
+		assert.Nil(t, err)
+		assert.Len(t, macros, 1)
+		assert.Equal(t, macros[key], fmt.Sprintf("(%s)", value))
+		server.Close()
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+
+	client.Close()
+
 	storage.removeDatabaseFiles()
+}
+
+func TestNativeStorageStreamRecords(t *testing.T) {
+	query := ""
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+
+	storage := NewNativeStorage(false).(*nativeStorage)
+
+	for index := 0; index < 100; index++ {
+		storage.InsertData([]byte(payload))
+	}
+
+	server, client := net.Pipe()
+	go func() {
+		storage.StreamRecords(server, []byte(query))
+		server.Close()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	client.Close()
+
+	storage.Reset()
+}
+
+func TestNativeStorageRetrieveSingle(t *testing.T) {
+	index := 42
+	query := ""
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+
+	expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
+
+	storage := NewNativeStorage(false).(*nativeStorage)
+
+	for index := 0; index < 100; index++ {
+		storage.InsertData([]byte(payload))
+	}
+
+	server, client := net.Pipe()
+	go func() {
+		storage.RetrieveSingle(server, basenine.IndexToID(index), query)
+		server.Close()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	bytes, err := ioutil.ReadAll(client)
+	assert.Nil(t, err)
+	assert.JSONEq(t, expected, string(bytes))
+
+	client.Close()
+
+	storage.Reset()
+}
+
+func TestNativeStorageFetch(t *testing.T) {
+	query := ""
+	payload := `{"brand":{"name":"Chevrolet"},"model":"Camaro","year":2021}`
+
+	storage := NewNativeStorage(false).(*nativeStorage)
+
+	for index := 0; index < 100; index++ {
+		storage.InsertData([]byte(payload))
+	}
+
+	server, client := net.Pipe()
+	go func() {
+		storage.Fetch(server, basenine.IndexToID(42), "-1", query, "20")
+		server.Close()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	bytes, err := ioutil.ReadAll(client)
+	assert.Nil(t, err)
+	assert.Len(t, strings.Split(string(bytes), "\n"), 41)
+
+	client.Close()
+
+	storage.Reset()
+}
+
+func TestNativeStorageSetLimit(t *testing.T) {
+	limit := 1000000 // 1MB
+
+	storage := NewNativeStorage(false).(*nativeStorage)
+
+	server, client := net.Pipe()
+	go func() {
+		storage.SetLimit(server, []byte(fmt.Sprintf("%d", limit)))
+		server.Close()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	client.Close()
+
+	storage.Lock()
+	assert.Equal(t, int64(limit/2), storage.partitionSizeLimit)
+	storage.Unlock()
+}
+
+func TestNativeStorageSetInsertionFilter(t *testing.T) {
+	insertionFilter := `brand.name == "Chevrolet" and redact("year")`
+
+	storage := NewNativeStorage(false).(*nativeStorage)
+
+	server, client := net.Pipe()
+	go func() {
+		storage.SetInsertionFilter(server, []byte(insertionFilter))
+		server.Close()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	client.Close()
+
+	storage.Lock()
+	assert.Equal(t, insertionFilter, storage.insertionFilter)
+	storage.Unlock()
 }
 
 func TestNativeStorageSetPartitionSizeLimit(t *testing.T) {
