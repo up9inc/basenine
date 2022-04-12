@@ -177,6 +177,10 @@ func TestNativeStorageSetLimit(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
+	bytes, err := ioutil.ReadAll(client)
+	assert.Nil(t, err)
+	assert.Equal(t, "OK\n", string(bytes))
+
 	client.Close()
 
 	storage.Lock()
@@ -197,11 +201,44 @@ func TestNativeStorageSetInsertionFilter(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
+	bytes, err := ioutil.ReadAll(client)
+	assert.Nil(t, err)
+	assert.Equal(t, "OK\n", string(bytes))
+
 	client.Close()
 
 	storage.Lock()
 	assert.Equal(t, insertionFilter, storage.insertionFilter)
 	storage.Unlock()
+}
+
+var validateQueryData = []struct {
+	query    string
+	response string
+}{
+	{`brand.name == "Chevrolet"`, `OK`},
+	{`=.=`, `1:1: unexpected token "="`},
+	{`request.path[3.14] == "hello"`, `1:14: unexpected token "3.14" (expected (<string> | <char> | <rawstring> | "*") "]")`},
+}
+
+func TestNativeStorageValidateQuery(t *testing.T) {
+	for _, row := range validateQueryData {
+		storage := NewNativeStorage(false).(*nativeStorage)
+
+		server, client := net.Pipe()
+		go func() {
+			storage.ValidateQuery(server, []byte(row.query))
+			server.Close()
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+
+		bytes, err := ioutil.ReadAll(client)
+		assert.Nil(t, err)
+		assert.Equal(t, fmt.Sprintf("%s\n", row.response), string(bytes))
+
+		client.Close()
+	}
 }
 
 func TestNativeStorageSetPartitionSizeLimit(t *testing.T) {
