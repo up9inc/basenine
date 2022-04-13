@@ -116,7 +116,7 @@ func TestNativeStorageRetrieveSingle(t *testing.T) {
 
 	storage := NewNativeStorage(false).(*nativeStorage)
 
-	for index := 0; index < 100; index++ {
+	for i := 0; i < 100; i++ {
 		storage.InsertData([]byte(payload))
 	}
 

@@ -54,9 +54,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	log.Printf("Basenine Community (Version: %s)\n", basenine.VERSION)
+
 	switch *storageDriver {
 	case "native":
 		storage = storages.NewNativeStorage(*persistent)
+		log.Printf("Using native storage driver.\n")
 	default:
 		log.Panicf("Unknown storage driver: %s", *storageDriver)
 	}
@@ -155,7 +158,7 @@ func handleConnection(conn net.Conn) {
 				}
 			}
 		case basenine.INSERT:
-			err = storage.InsertData(data)
+			_, err = storage.InsertData(data)
 		case basenine.INSERTION_FILTER:
 			err = storage.SetInsertionFilter(conn, data)
 			basenine.SendErr(conn, err)
