@@ -345,7 +345,10 @@ func (storage *nativeStorage) GetMacros() (macros map[string]string, err error) 
 func (storage *nativeStorage) PrepareQuery(query string, macros map[string]string) (expr *basenine.Expression, prop basenine.Propagate, err error) {
 	// Expand all macros in the query, if there are any.
 	query, err = basenine.ExpandMacros(macros, query)
-	basenine.Check(err)
+	if err != nil {
+		log.Printf("Macro expand error: %v\n", err)
+		return
+	}
 
 	// Parse the query.
 	expr, err = basenine.Parse(query)
@@ -358,7 +361,10 @@ func (storage *nativeStorage) PrepareQuery(query string, macros map[string]strin
 	// default value of leftOff is 0. leftOff(..) helper overrides it.
 	// can be -1 also, means that it's last record.
 	prop, err = basenine.Precompute(expr)
-	basenine.Check(err)
+	if err != nil {
+		log.Printf("Precompute error: %v\n", err)
+		return
+	}
 
 	return
 }
@@ -476,7 +482,10 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 
 			// Evaluate the current record against the given query.
 			truth, record, err := basenine.Eval(expr, string(b))
-			basenine.Check(err)
+			if err != nil {
+				log.Printf("Eval error: %v\n", err)
+				continue
+			}
 
 			// Write the record into TCP connection if it passes the query.
 			if truth {
@@ -558,6 +567,12 @@ func (storage *nativeStorage) RetrieveSingle(conn net.Conn, index string, query 
 	var b []byte
 	b, _, err = storage.readRecord(f, n)
 	f.Close()
+	if err != nil {
+		msg := fmt.Sprintf("Read error: %v\n", err)
+		log.Println(msg)
+		conn.Write([]byte(msg))
+		return
+	}
 
 	macros, err := storage.GetMacros()
 	if err != nil {
@@ -572,7 +587,12 @@ func (storage *nativeStorage) RetrieveSingle(conn net.Conn, index string, query 
 		return
 	}
 	_, record, err := basenine.Eval(expr, string(b))
-	basenine.Check(err)
+	if err != nil {
+		msg := fmt.Sprintf("Eval error: %v\n", err)
+		log.Println(msg)
+		conn.Write([]byte(msg))
+		return
+	}
 
 	conn.Write([]byte(fmt.Sprintf("%s\n", record)))
 	return
@@ -770,7 +790,10 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 
 		// Evaluate the current record against the given query.
 		truth, record, err := basenine.Eval(expr, string(b))
-		basenine.Check(err)
+		if err != nil {
+			log.Printf("Eval error: %v\n", err)
+			continue
+		}
 
 		metadata, _ = json.Marshal(basenine.Metadata{
 			NumberOfWritten:    numberOfWritten,
@@ -988,6 +1011,9 @@ func (storage *nativeStorage) getLastTimestampOfPartition(discardedPartitionInde
 	var b []byte
 	b, _, err = storage.readRecord(f, n)
 	f.Close()
+	if err != nil {
+		return
+	}
 
 	var jsonPath jp.Expr
 	jsonPath, err = jp.ParseString(`timestamp`)
@@ -1086,7 +1112,9 @@ func (storage *nativeStorage) readRecord(f *os.File, seek int64) (b []byte, n in
 		return
 	}
 	n += 8
-	basenine.Check(err)
+	if err != nil {
+		return
+	}
 	length := int(binary.LittleEndian.Uint64(l))
 
 	b = make([]byte, length)
@@ -1096,7 +1124,9 @@ func (storage *nativeStorage) readRecord(f *os.File, seek int64) (b []byte, n in
 		return
 	}
 	n += int64(length)
-	basenine.Check(err)
+	if err != nil {
+		return
+	}
 	return
 }
 
