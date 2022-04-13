@@ -25,6 +25,7 @@ type Metadata struct {
 	NumberOfWritten    uint64 `json:"numberOfWritten"`
 	LeftOff            string `json:"leftOff"`
 	TruncatedTimestamp int64  `json:"truncatedTimestamp"`
+	NoMoreData         bool   `json:"noMoreData"`
 }
 
 // Commands refers to TCP connection modes.

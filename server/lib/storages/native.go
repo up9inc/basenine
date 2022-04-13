@@ -795,12 +795,18 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 			continue
 		}
 
+		var noMoreData bool
+		if i == len(subOffsets)-1 {
+			noMoreData = true
+		}
+
 		metadata, _ = json.Marshal(basenine.Metadata{
 			NumberOfWritten:    numberOfWritten,
 			Current:            uint64(queried),
 			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
 			LeftOff:            basenine.IndexToID(int(_leftOff)),
 			TruncatedTimestamp: truncatedTimestamp,
+			NoMoreData:         noMoreData,
 		})
 
 		_, err = conn.Write([]byte(fmt.Sprintf("%s %s\n", basenine.CMD_METADATA, string(metadata))))
