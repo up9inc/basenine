@@ -90,7 +90,7 @@ type Storage interface {
 	Init(persistent bool) (err error)
 	DumpCore(silent bool, dontLock bool) (err error)
 	RestoreCore() (err error)
-	InsertData(data []byte) (err error)
+	InsertData(data []byte) (insertedId interface{}, err error)
 	ValidateQuery(conn net.Conn, data []byte) (err error)
 	GetMacros() (macros map[string]string, err error)
 	PrepareQuery(query string, macros map[string]string) (expr *Expression, prop Propagate, err error)

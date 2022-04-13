@@ -263,7 +263,7 @@ func (storage *nativeStorage) RestoreCore() (err error) {
 // index of that record.
 // Then marshals that map back and safely writes the bytes into
 // the current database partitition.
-func (storage *nativeStorage) InsertData(data []byte) (err error) {
+func (storage *nativeStorage) InsertData(data []byte) (insertedId interface{}, err error) {
 	// partitionIndex -1 means there are not partitions created yet
 	// Safely access the current partition index
 	storage.RLock()
@@ -304,7 +304,8 @@ func (storage *nativeStorage) InsertData(data []byte) (err error) {
 	f := storage.partitions[storage.partitionIndex]
 
 	// Set "id" field to the index of the record.
-	d["id"] = basenine.IndexToID(l)
+	insertedId = basenine.IndexToID(l)
+	d["id"] = insertedId
 
 	// Marshal it back.
 	data, _ = json.Marshal(d)
