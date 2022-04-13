@@ -7,7 +7,7 @@ require (
 	github.com/clbanning/mxj/v2 v2.5.5
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/fsnotify/fsnotify v1.5.1
-	github.com/ohler55/ojg v1.12.13
+	github.com/ohler55/ojg v1.14.0
 	github.com/stretchr/testify v1.7.0
 )
 
