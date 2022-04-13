@@ -155,7 +155,7 @@ func TestFetch(t *testing.T) {
 	data, meta, err := Fetch(HOST, PORT, fmt.Sprintf("%024d", 100), -1, `chevy`, 20, 20*time.Second)
 	assert.Nil(t, err)
 
-	assert.Equal(t, fmt.Sprintf(`{"current":20,"total":15000,"numberOfWritten":19,"leftOff":"%s","truncatedTimestamp":0}`, fmt.Sprintf("%024d", 79)), string(meta))
+	assert.Equal(t, fmt.Sprintf(`{"current":20,"total":15000,"numberOfWritten":19,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 79)), string(meta))
 
 	i := 0
 	for id := 99; id > 80; id-- {
