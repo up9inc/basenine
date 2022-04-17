@@ -52,6 +52,8 @@ const (
 // Software name
 const SoftwareName = "Basenine"
 
+var writeDeadlineVar time.Duration = 1 * time.Second
+
 // Connection is the struct that holds the TCP connection reference.
 type Connection struct {
 	net.Conn
@@ -67,9 +69,14 @@ func NewConnection(host string, port string) (connection *Connection, err error)
 	return
 }
 
+// SetWriteDeadlineVar sets the time.Duration variable writeDeadlineVar that's used for TCP SetWriteDeadline
+func (c *Connection) SetWriteDeadlineVar(d time.Duration) {
+	writeDeadlineVar = d
+}
+
 // Send sends given []byte to the server which the connection is established to.
 func (c *Connection) Send(data []byte) (err error) {
-	err = c.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	err = c.SetWriteDeadline(time.Now().Add(writeDeadlineVar))
 	if err != nil {
 		return
 	}
