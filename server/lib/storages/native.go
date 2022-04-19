@@ -73,7 +73,7 @@ type nativeStorage struct {
 	partitionIndex        int64
 	partitionSizeLimit    int64
 	truncatedTimestamp    int64
-	removedOffsetsCounter int
+	removedOffsetsCounter uint64
 	macros                map[string]string
 	insertionFilter       string
 	insertionFilterExpr   *basenine.Expression
@@ -90,7 +90,7 @@ type nativeStorageExport struct {
 	PartitionIndex        int64
 	PartitionSizeLimit    int64
 	TruncatedTimestamp    int64
-	RemovedOffsetsCounter int
+	RemovedOffsetsCounter uint64
 	Macros                map[string]string
 	InsertionFilter       string
 }
@@ -299,7 +299,7 @@ func (storage *nativeStorage) InsertData(data []byte) (insertedId interface{}, e
 	var lastOffset int64
 	// Safely access the last offset and current partition.
 	storage.Lock()
-	l := len(storage.offsets)
+	l := len(storage.offsets) + int(storage.removedOffsetsCounter)
 	lastOffset = storage.lastOffset
 	f := storage.partitions[storage.partitionIndex]
 
@@ -404,9 +404,6 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 	// Number of queried records
 	var queried uint64 = 0
 
-	// removedCounter keeps track of how many offsets belong to a removed partition.
-	var removedOffsetsCounter int
-
 	for {
 		// f is the current partition we're reading the data from.
 		var f *os.File
@@ -422,11 +419,15 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 
 		// Safely access the next part of offsets and partition references.
 		storage.RLock()
-		subOffsets := storage.offsets[leftOff:]
-		subPartitionRefs := storage.partitionRefs[leftOff:]
+		iLeftOff := leftOff - int64(storage.removedOffsetsCounter)
+		if iLeftOff < 0 {
+			leftOff = int64(storage.removedOffsetsCounter)
+			iLeftOff = 0
+		}
+		subOffsets := storage.offsets[iLeftOff:]
+		subPartitionRefs := storage.partitionRefs[iLeftOff:]
 		totalNumberOfRecords := len(storage.offsets)
 		truncatedTimestamp := storage.truncatedTimestamp
-		removedOffsetsCounter = storage.removedOffsetsCounter
 		storage.RUnlock()
 
 		var metadata *basenine.Metadata
@@ -497,13 +498,10 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 				numberOfWritten++
 			}
 
-			// Correct the metadata values by subtracting removedOffsetsCounter
-			realTotal := totalNumberOfRecords - removedOffsetsCounter
-
 			metadata = &basenine.Metadata{
 				NumberOfWritten:    numberOfWritten,
 				Current:            uint64(queried),
-				Total:              uint64(realTotal),
+				Total:              uint64(totalNumberOfRecords),
 				LeftOff:            basenine.IndexToID(int(leftOff)),
 				TruncatedTimestamp: truncatedTimestamp,
 			}
@@ -539,17 +537,25 @@ func (storage *nativeStorage) RetrieveSingle(conn net.Conn, index string, query 
 
 	// Safely access the length of offsets slice.
 	storage.RLock()
-	l := len(storage.offsets)
+	l := len(storage.offsets) + int(storage.removedOffsetsCounter)
+	removedOffsetsCounter := storage.removedOffsetsCounter
 	storage.RUnlock()
 
+	_index -= int(removedOffsetsCounter)
+
+	if _index < 0 {
+		conn.Write([]byte(fmt.Sprintf("Record does not exist!\n")))
+		return
+	}
+
 	// Check if the index is in the offsets slice.
-	if _index > l {
+	if int(_index) > l {
 		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", _index)))
 		return
 	}
 
 	// Safely acces the offsets and partition references
-	n, f, err := storage.getOffsetAndPartition(_index)
+	n, f, err := storage.getOffsetAndPartition(uint64(_index))
 
 	// Record can only be removed if the partition of the record
 	// that it belongs to is removed. Therefore a file open error
@@ -654,7 +660,7 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 
 	// Safely access the length of offsets slice.
 	storage.RLock()
-	l := len(storage.offsets)
+	l := len(storage.offsets) + int(storage.removedOffsetsCounter)
 	storage.RUnlock()
 
 	// Check if the leftOff is in the offsets slice.
@@ -694,20 +700,23 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 	// Safely access the next part of offsets and partition references.
 	var subOffsets []int64
 	var subPartitionRefs []int64
-	var totalNumberOfRecords int
+	var totalNumberOfRecords uint64
 	var truncatedTimestamp int64
-	var removedOffsetsCounter int
 	storage.RLock()
-	totalNumberOfRecords = len(storage.offsets)
+	totalNumberOfRecords = uint64(len(storage.offsets))
 	truncatedTimestamp = storage.truncatedTimestamp
-	if _direction < 0 {
-		subOffsets = storage.offsets[:_leftOff]
-		subPartitionRefs = storage.partitionRefs[:_leftOff]
-	} else {
-		subOffsets = storage.offsets[_leftOff:]
-		subPartitionRefs = storage.partitionRefs[_leftOff:]
+	iLeftOff := _leftOff - int64(storage.removedOffsetsCounter)
+	if iLeftOff < 0 {
+		_leftOff = int64(storage.removedOffsetsCounter)
+		iLeftOff = 0
 	}
-	removedOffsetsCounter = storage.removedOffsetsCounter
+	if _direction < 0 {
+		subOffsets = storage.offsets[:iLeftOff]
+		subPartitionRefs = storage.partitionRefs[:iLeftOff]
+	} else {
+		subOffsets = storage.offsets[iLeftOff:]
+		subPartitionRefs = storage.partitionRefs[iLeftOff:]
+	}
 	storage.RUnlock()
 
 	var metadata []byte
@@ -718,7 +727,7 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 	metadata, _ = json.Marshal(basenine.Metadata{
 		NumberOfWritten:    numberOfWritten,
 		Current:            uint64(queried),
-		Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
+		Total:              totalNumberOfRecords,
 		LeftOff:            basenine.IndexToID(int(_leftOff)),
 		TruncatedTimestamp: truncatedTimestamp,
 	})
@@ -803,7 +812,7 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 		metadata, _ = json.Marshal(basenine.Metadata{
 			NumberOfWritten:    numberOfWritten,
 			Current:            uint64(queried),
-			Total:              uint64(totalNumberOfRecords - removedOffsetsCounter),
+			Total:              totalNumberOfRecords,
 			LeftOff:            basenine.IndexToID(int(_leftOff)),
 			TruncatedTimestamp: truncatedTimestamp,
 			NoMoreData:         noMoreData,
@@ -991,23 +1000,24 @@ func (storage *nativeStorage) getLastTimestampOfPartition(discardedPartitionInde
 	partitionRefs := storage.partitionRefs
 	storage.RUnlock()
 
-	var prevIndex int
-	var removedOffsetsCounter int
+	var removedOffsetsCounter uint64
+
 	for i := range offsets {
 		if partitionRefs[i] > discardedPartitionIndex {
 			break
 		}
-		prevIndex = i
 		removedOffsetsCounter++
 	}
 
 	storage.Lock()
-	storage.removedOffsetsCounter = removedOffsetsCounter
+	storage.offsets = storage.offsets[removedOffsetsCounter:]
+	storage.partitionRefs = storage.partitionRefs[removedOffsetsCounter:]
+	storage.removedOffsetsCounter += removedOffsetsCounter
 	storage.Unlock()
 
 	var n int64
 	var f *os.File
-	n, f, err = storage.getOffsetAndPartition(prevIndex)
+	n, f, err = storage.getOffsetAndPartition(0)
 
 	if err != nil {
 		return
@@ -1160,7 +1170,7 @@ func (storage *nativeStorage) handleNegativeLeftOff(_leftOff string, increment i
 	// If leftOff value is -1 then set it to last offset
 	if _leftOff == basenine.LATEST {
 		storage.RLock()
-		lastOffset := len(storage.offsets) - 1
+		lastOffset := len(storage.offsets) + int(storage.removedOffsetsCounter) - 1
 		storage.RUnlock()
 		leftOff = int64(lastOffset)
 		if leftOff < 0 {
@@ -1177,7 +1187,7 @@ func (storage *nativeStorage) handleNegativeLeftOff(_leftOff string, increment i
 }
 
 // Safely access the offsets and partition references
-func (storage *nativeStorage) getOffsetAndPartition(index int) (offset int64, f *os.File, err error) {
+func (storage *nativeStorage) getOffsetAndPartition(index uint64) (offset int64, f *os.File, err error) {
 	storage.RLock()
 	offset = storage.offsets[index]
 	i := storage.partitionRefs[index]

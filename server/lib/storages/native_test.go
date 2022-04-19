@@ -45,7 +45,7 @@ func TestNativeStorageInsertAndReadData(t *testing.T) {
 		storage.InsertData([]byte(payload))
 
 		// Safely acces the offsets and partition references
-		n, rf, err := storage.getOffsetAndPartition(index)
+		n, rf, err := storage.getOffsetAndPartition(uint64(index))
 		assert.Nil(t, err)
 
 		rf.Seek(n, io.SeekStart)
