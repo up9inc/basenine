@@ -69,7 +69,7 @@ func NewConnection(host string, port string) (connection *Connection, err error)
 
 // Send sends given []byte to the server which the connection is established to.
 func (c *Connection) Send(data []byte) (err error) {
-	err = c.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	err = c.SetWriteDeadline(time.Now().Add(3 * time.Second))
 	if err != nil {
 		return
 	}

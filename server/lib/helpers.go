@@ -62,7 +62,7 @@ func ConnCheck(conn net.Conn) error {
 		}
 	default:
 		// Workaround for detecting close for net.Pipe()
-		err := conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		err := conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 		if err == io.ErrClosedPipe {
 			sysErr = err
 		}
