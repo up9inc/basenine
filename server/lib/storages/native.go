@@ -104,6 +104,14 @@ type NativeStorageCoreDumpLock struct {
 	sync.Mutex
 }
 
+// Return values for fetch method in case of async call
+type FetchReturn struct {
+	leftOff         int64
+	numberOfWritten uint64
+	queried         uint64
+	err             error
+}
+
 func NewNativeStorage(persistent bool) (storage basenine.Storage) {
 	// Initiate the watcher
 	watcher, err := fsnotify.NewWatcher()
@@ -374,7 +382,21 @@ func (storage *nativeStorage) PrepareQuery(query string, macros map[string]strin
 // and filters out the records according to query.
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
-func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err error) {
+func (storage *nativeStorage) StreamRecords(conn net.Conn, query string, fetch string, timeoutMs string) (err error) {
+	var _fetch int
+	_fetch, err = strconv.Atoi(fetch)
+	if err != nil {
+		conn.Close()
+		return
+	}
+
+	var _timeoutMs int
+	_timeoutMs, err = strconv.Atoi(timeoutMs)
+	if err != nil {
+		conn.Close()
+		return
+	}
+
 	var macros map[string]string
 	macros, err = storage.GetMacros()
 	if err != nil {
@@ -384,7 +406,7 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 
 	var expr *basenine.Expression
 	var prop basenine.Propagate
-	expr, prop, err = storage.PrepareQuery(string(data), macros)
+	expr, prop, err = storage.PrepareQuery(query, macros)
 	if err != nil {
 		conn.Close()
 		return
@@ -393,8 +415,10 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 	limit := prop.Limit
 	_leftOff := prop.LeftOff
 
-	leftOff, err := storage.handleNegativeLeftOff(_leftOff, 1)
+	var leftOff int64
+	leftOff, err = storage.handleNegativeLeftOff(_leftOff, 1)
 	if err != nil {
+		conn.Close()
 		return
 	}
 
@@ -403,6 +427,27 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 
 	// Number of queried records
 	var queried uint64 = 0
+
+	if _fetch > 0 {
+		var wg sync.WaitGroup
+		params := &FetchReturn{
+			leftOff:         leftOff,
+			numberOfWritten: numberOfWritten,
+			queried:         queried,
+			err:             err,
+		}
+		go storage.fetch(&wg, conn, params, -1, expr, _fetch)
+		wg.Add(1)
+		basenine.WaitTimeout(&wg, time.Duration(_timeoutMs)*time.Millisecond)
+
+		numberOfWritten = params.numberOfWritten
+		queried = params.queried
+		err = params.err
+		if err != nil {
+			conn.Close()
+			return
+		}
+	}
 
 	for {
 		// f is the current partition we're reading the data from.
@@ -658,17 +703,6 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 		_leftOff++
 	}
 
-	// Safely access the length of offsets slice.
-	storage.RLock()
-	l := len(storage.offsets) + int(storage.removedOffsetsCounter)
-	storage.RUnlock()
-
-	// Check if the leftOff is in the offsets slice.
-	if int(_leftOff) > l {
-		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", _leftOff)))
-		return
-	}
-
 	macros, err := storage.GetMacros()
 	if err != nil {
 		conn.Close()
@@ -682,14 +716,37 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 		conn.Close()
 	}
 
-	// Number of written records to the TCP connection.
-	var numberOfWritten uint64 = 0
+	params := &FetchReturn{
+		leftOff: _leftOff,
+	}
+
+	storage.fetch(nil, conn, params, _direction, expr, _limit)
+	err = params.err
+	return
+}
+
+// Fetch fetches records in prefered direction, starting from leftOff up to given limit
+func (storage *nativeStorage) fetch(wg *sync.WaitGroup, conn net.Conn, params *FetchReturn, direction int, expr *basenine.Expression, limit int) {
+	if wg != nil {
+		defer wg.Done()
+	}
+
+	// Safely access the length of offsets slice.
+	storage.RLock()
+	l := len(storage.offsets) + int(storage.removedOffsetsCounter)
+	storage.RUnlock()
+
+	// Check if the leftOff is in the offsets slice.
+	if int(params.leftOff) > l {
+		conn.Write([]byte(fmt.Sprintf("Index out of range: %d\n", params.leftOff)))
+		return
+	}
 
 	// f is the current partition we're reading the data from.
 	var f *os.File
 
-	err = basenine.ConnCheck(conn)
-	if err != nil {
+	params.err = basenine.ConnCheck(conn)
+	if params.err != nil {
 		// Connection was closed by the peer, close the current partition.
 		if f != nil {
 			f.Close()
@@ -705,12 +762,12 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 	storage.RLock()
 	totalNumberOfRecords = uint64(len(storage.offsets))
 	truncatedTimestamp = storage.truncatedTimestamp
-	iLeftOff := _leftOff - int64(storage.removedOffsetsCounter)
+	iLeftOff := params.leftOff - int64(storage.removedOffsetsCounter)
 	if iLeftOff < 0 {
-		_leftOff = int64(storage.removedOffsetsCounter)
+		params.leftOff = int64(storage.removedOffsetsCounter)
 		iLeftOff = 0
 	}
-	if _direction < 0 {
+	if direction < 0 {
 		subOffsets = storage.offsets[:iLeftOff]
 		subPartitionRefs = storage.partitionRefs[:iLeftOff]
 	} else {
@@ -721,39 +778,36 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 
 	var metadata []byte
 
-	// Number of queried records
-	var queried uint64 = 0
-
 	metadata, _ = json.Marshal(basenine.Metadata{
-		NumberOfWritten:    numberOfWritten,
-		Current:            uint64(queried),
+		NumberOfWritten:    params.numberOfWritten,
+		Current:            uint64(params.queried),
 		Total:              totalNumberOfRecords,
-		LeftOff:            basenine.IndexToID(int(_leftOff)),
+		LeftOff:            basenine.IndexToID(int(params.leftOff)),
 		TruncatedTimestamp: truncatedTimestamp,
 	})
 
-	if _direction < 0 {
+	if direction < 0 {
 		subOffsets = basenine.ReverseSlice(subOffsets)
 		subPartitionRefs = basenine.ReverseSlice(subPartitionRefs)
 	}
 
 	// Iterate through the next part of the offsets
 	for i, offset := range subOffsets {
-		if int(numberOfWritten) >= _limit {
+		if int(params.numberOfWritten) >= limit {
 			return
 		}
 
-		if _direction < 0 {
-			_leftOff--
+		if direction < 0 {
+			params.leftOff--
 		} else {
-			_leftOff++
+			params.leftOff++
 		}
 
-		if _leftOff < 0 {
-			_leftOff = 0
+		if params.leftOff < 0 {
+			params.leftOff = 0
 		}
 
-		queried++
+		params.queried++
 
 		// Safely access the *os.File pointer that the current offset refers to.
 		var partitionRef int64
@@ -776,10 +830,10 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 			}
 
 			// Open the partition that the current offset refers to.
-			f, err = os.Open(fRef.Name())
+			f, params.err = os.Open(fRef.Name())
 
 			// If the file cannot be opened, pass.
-			if err != nil {
+			if params.err != nil {
 				continue
 			}
 		}
@@ -789,11 +843,11 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 
 		// Read the record into b
 		var b []byte
-		b, _, err = storage.readRecord(f, offset)
+		b, _, params.err = storage.readRecord(f, offset)
 
 		// Even if it's EOF, continue.
 		// Because a later offset might point to a previous region of the file.
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		if params.err == io.EOF || params.err == io.ErrUnexpectedEOF {
 			continue
 		}
 
@@ -810,10 +864,10 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 		}
 
 		metadata, _ = json.Marshal(basenine.Metadata{
-			NumberOfWritten:    numberOfWritten,
-			Current:            uint64(queried),
+			NumberOfWritten:    params.numberOfWritten,
+			Current:            uint64(params.queried),
 			Total:              totalNumberOfRecords,
-			LeftOff:            basenine.IndexToID(int(_leftOff)),
+			LeftOff:            basenine.IndexToID(int(params.leftOff)),
 			TruncatedTimestamp: truncatedTimestamp,
 			NoMoreData:         noMoreData,
 		})
@@ -831,7 +885,7 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 				log.Printf("Write error: %v\n", err)
 				break
 			}
-			numberOfWritten++
+			params.numberOfWritten++
 		}
 	}
 	return

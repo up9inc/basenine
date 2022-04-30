@@ -95,7 +95,7 @@ type Storage interface {
 	ValidateQuery(conn net.Conn, data []byte) (err error)
 	GetMacros() (macros map[string]string, err error)
 	PrepareQuery(query string, macros map[string]string) (expr *Expression, prop Propagate, err error)
-	StreamRecords(conn net.Conn, data []byte) (err error)
+	StreamRecords(conn net.Conn, query string, fetch string, timeoutMs string) (err error)
 	RetrieveSingle(conn net.Conn, index string, query string) (err error)
 	Fetch(conn net.Conn, leftOff string, direction string, query string, limit string) (err error)
 	ApplyMacro(conn net.Conn, data []byte) (err error)

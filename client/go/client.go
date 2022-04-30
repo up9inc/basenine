@@ -93,7 +93,7 @@ func (c *Connection) InsertMode() (err error) {
 // It takes the filtering language (query) as the first parameter and
 // a []byte channel which the records will be streamed into as the second parameter.
 // Third parameter is the channel for streaming metadata, progress of the query.
-func (c *Connection) Query(query string, data chan []byte, meta chan []byte) (err error) {
+func (c *Connection) Query(query string, fetch int, timeoutMs int, data chan []byte, meta chan []byte) (err error) {
 	query = escapeLineFeed(query)
 
 	var wg sync.WaitGroup
@@ -107,6 +107,16 @@ func (c *Connection) Query(query string, data chan []byte, meta chan []byte) (er
 	}
 
 	err = c.SendText(query)
+	if err != nil {
+		c.Close()
+	}
+
+	err = c.SendText(fmt.Sprintf("%d", fetch))
+	if err != nil {
+		c.Close()
+	}
+
+	err = c.SendText(fmt.Sprintf("%d", timeoutMs))
 	if err != nil {
 		c.Close()
 	}
@@ -178,7 +188,7 @@ func Fetch(host string, port string, leftOff string, direction int, query string
 		return
 	}
 
-	err = c.SendText(fmt.Sprintf("%s", leftOff))
+	err = c.SendText(leftOff)
 	if err != nil {
 		c.Close()
 		return
@@ -190,7 +200,7 @@ func Fetch(host string, port string, leftOff string, direction int, query string
 		return
 	}
 
-	err = c.SendText(fmt.Sprintf("%s", query))
+	err = c.SendText(query)
 	if err != nil {
 		c.Close()
 		return

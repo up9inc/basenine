@@ -107,7 +107,13 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", query)))
 
-	if waitTimeout(&wg, 1*time.Second) {
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", 0)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", 0)))
+
+	if basenine.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	} else {
 		client.Close()
@@ -184,7 +190,13 @@ func TestServerProtocolQueryMode(t *testing.T) {
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
 
-		if waitTimeout(&wg, 1*time.Second) {
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%d\n", 0)))
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		client.Write([]byte(fmt.Sprintf("%d\n", 0)))
+
+		if basenine.WaitTimeout(&wg, 1*time.Second) {
 			t.Fatal("Timed out waiting for wait group")
 		} else {
 			client.Close()
@@ -244,7 +256,7 @@ func TestServerProtocolSingleMode(t *testing.T) {
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte("\n"))
 
-	if waitTimeout(&wg, 1*time.Second) {
+	if basenine.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	} else {
 		client.Close()
@@ -302,7 +314,7 @@ func TestServerProtocolValidateMode(t *testing.T) {
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
 
-		if waitTimeout(&wg, 1*time.Second) {
+		if basenine.WaitTimeout(&wg, 1*time.Second) {
 			t.Fatal("Timed out waiting for wait group")
 		} else {
 			client.Close()
@@ -377,7 +389,13 @@ func TestServerProtocolMacroMode(t *testing.T) {
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", query)))
 
-	if waitTimeout(&wg, 1*time.Second) {
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", 0)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte(fmt.Sprintf("%d\n", 0)))
+
+	if basenine.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Timed out waiting for wait group")
 	} else {
 		client.Close()
@@ -481,7 +499,7 @@ func TestServerProtocolFetchMode(t *testing.T) {
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%d\n", row.limit)))
 
-		if waitTimeout(&wg, 10*time.Second) {
+		if basenine.WaitTimeout(&wg, 10*time.Second) {
 			t.Fatal("Timed out waiting for wait group")
 		} else {
 			client.Close()
@@ -572,20 +590,4 @@ func handleCommands(bytes []byte) bool {
 	}
 
 	return false
-}
-
-// waitTimeout waits for the waitgroup for the specified max timeout.
-// Returns true if waiting timed out.
-func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	select {
-	case <-c:
-		return false // completed normally
-	case <-time.After(timeout):
-		return true // timed out
-	}
 }

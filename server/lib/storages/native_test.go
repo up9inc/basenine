@@ -96,7 +96,7 @@ func TestNativeStorageStreamRecords(t *testing.T) {
 
 	server, client := net.Pipe()
 	go func() {
-		storage.StreamRecords(server, []byte(query))
+		storage.StreamRecords(server, query, "0", "0")
 		server.Close()
 	}()
 

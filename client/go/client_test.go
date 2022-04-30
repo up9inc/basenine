@@ -139,7 +139,7 @@ func TestQuery(t *testing.T) {
 	go handleMetaChannel(c, meta)
 	wg.Add(1)
 
-	err = c.Query(`chevy`, data, meta)
+	err = c.Query(`chevy`, 0, 0, data, meta)
 	assert.Nil(t, err)
 
 	if waitTimeout(&wg, 20*time.Second) {

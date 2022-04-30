@@ -117,6 +117,9 @@ func handleConnection(conn net.Conn) {
 	// Set connection mode to NONE
 	var mode basenine.ConnectionMode = basenine.NONE
 
+	// Arguments for the QUERY command (query, fetch, timeoutMs)
+	var queryArgs []string
+
 	// Arguments for the SINGLE command (index, query)
 	var singleArgs []string
 
@@ -163,7 +166,12 @@ func handleConnection(conn net.Conn) {
 			err = storage.SetInsertionFilter(conn, data)
 			basenine.SendErr(conn, err)
 		case basenine.QUERY:
-			err = storage.StreamRecords(conn, data)
+			if len(queryArgs) < 3 {
+				queryArgs = append(queryArgs, string(data))
+			}
+			if len(queryArgs) == 3 {
+				err = storage.StreamRecords(conn, queryArgs[0], queryArgs[1], queryArgs[2])
+			}
 		case basenine.SINGLE:
 			if len(singleArgs) < 2 {
 				singleArgs = append(singleArgs, string(data))
