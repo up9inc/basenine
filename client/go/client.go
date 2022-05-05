@@ -93,7 +93,7 @@ func (c *Connection) InsertMode() (err error) {
 // It takes the filtering language (query) as the first parameter and
 // a []byte channel which the records will be streamed into as the second parameter.
 // Third parameter is the channel for streaming metadata, progress of the query.
-func (c *Connection) Query(query string, data chan []byte, meta chan []byte) (err error) {
+func (c *Connection) Query(leftOff string, query string, data chan []byte, meta chan []byte) (err error) {
 	query = escapeLineFeed(query)
 
 	var wg sync.WaitGroup
@@ -104,6 +104,11 @@ func (c *Connection) Query(query string, data chan []byte, meta chan []byte) (er
 	if err != nil {
 		c.Close()
 		return
+	}
+
+	err = c.SendText(leftOff)
+	if err != nil {
+		c.Close()
 	}
 
 	err = c.SendText(query)
@@ -156,7 +161,7 @@ func Single(host string, port string, id string, query string) (data []byte, err
 
 // Fetch returns limit number of records by querying on either positive(future) or negative(past) direction
 // that starts from leftOff.
-func Fetch(host string, port string, leftOff string, direction int, query string, limit int, timeout time.Duration) (data [][]byte, meta []byte, err error) {
+func Fetch(host string, port string, leftOff string, direction int, query string, limit int, timeout time.Duration) (data [][]byte, firstMeta []byte, lastMeta []byte, err error) {
 	query = escapeLineFeed(query)
 
 	var c *Connection
@@ -218,7 +223,10 @@ func Fetch(host string, port string, leftOff string, direction int, query string
 					return
 				}
 			}
-		case meta = <-metaChan:
+		case lastMeta = <-metaChan:
+			if len(firstMeta) == 0 {
+				firstMeta = lastMeta
+			}
 			receivedMeta = true
 			if receivedData {
 				c.Close()

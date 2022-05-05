@@ -105,6 +105,9 @@ func TestServerProtocolInsertionFilterMode(t *testing.T) {
 	client.Write([]byte(fmt.Sprintf("%s\n", basenine.CMD_QUERY)))
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("\n"))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", query)))
 
 	if waitTimeout(&wg, 1*time.Second) {
@@ -125,7 +128,7 @@ var testServerProtocolQueryModeData = []struct {
 	{`brand.name == "Chevrolet"`, 100, 0},
 	{`brand.name == "Chevrolet" and limit(10)`, 10, 0},
 	{`limit(10) and brand.name == "Chevrolet"`, 10, 0},
-	{`leftOff(60) and brand.name == "Chevrolet"`, 40, 60},
+	{`brand.name == "Chevrolet"`, 40, 60},
 }
 
 func TestServerProtocolQueryMode(t *testing.T) {
@@ -180,6 +183,13 @@ func TestServerProtocolQueryMode(t *testing.T) {
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%s\n", basenine.CMD_QUERY)))
+
+		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+		strLeftOff := "\n"
+		if row.leftOff != 0 {
+			strLeftOff = fmt.Sprintf("%d\n", row.leftOff)
+		}
+		client.Write([]byte(strLeftOff))
 
 		client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		client.Write([]byte(fmt.Sprintf("%s\n", row.query)))
@@ -373,6 +383,9 @@ func TestServerProtocolMacroMode(t *testing.T) {
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", basenine.CMD_QUERY)))
+
+	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	client.Write([]byte("\n"))
 
 	client.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	client.Write([]byte(fmt.Sprintf("%s\n", query)))

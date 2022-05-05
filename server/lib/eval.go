@@ -355,12 +355,6 @@ func limit(args ...interface{}) (interface{}, interface{}) {
 	return args[0], true
 }
 
-func leftOff(args ...interface{}) (interface{}, interface{}) {
-	// Returns true no matter what. Evaluated on compile-time,
-	// starts the query from given index.
-	return args[0], true
-}
-
 func _json(args ...interface{}) (interface{}, interface{}) {
 	jsonString := stringOperand(args[1])
 
@@ -536,7 +530,6 @@ var helpers = map[string]interface{}{
 	"contains":   contains,
 	"datetime":   datetime,
 	"limit":      limit,
-	"leftOff":    leftOff,
 	"json":       _json,
 	"xml":        xml,
 	"redact":     redact,
