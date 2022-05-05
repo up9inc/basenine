@@ -111,7 +111,7 @@ c.Close()
 // The 4th argument query, is only effective in case of
 // record altering helpers like `redact` are used.
 // Please refer the BFL syntax reference for more info.
-data, err := Single("localhost", "9099", 42, "")
+data, err := Single("localhost", "9099", fmt.Sprintf("%024d", 42), "")
 if err != nil {
     panic(err)
 }
@@ -122,8 +122,8 @@ if err != nil {
 ```go
 // Retrieve up to 20 records starting from offset 100, in reverse direction (-1),
 // with query `brand.name == "Chevrolet"` and with a 5 seconds timeout.
-// Returns a slice of records and the latest meta state.
-data, meta, err := Fetch("localhost", "9099", 100, -1 `brand.name == "Chevrolet"`, 20, 5*time.Second)
+// Returns a slice of records, first meta and the latest meta state.
+data, firstMeta, lastMeta, err := Fetch("localhost", "9099", 100, -1 `brand.name == "Chevrolet"`, 20, 5*time.Second)
 if err != nil {
     panic(err)
 }
@@ -181,7 +181,9 @@ go handleDataChannel(&wg, c, data)
 go handleMetaChannel(c, meta)
 wg.Add(1)
 
-c.Query(`brand.name == "Chevrolet"`, data, meta)
+// The first argument can be an id, an empty string or "latest"
+// to start the streaming from the latest record.
+c.Query("", `brand.name == "Chevrolet"`, data, meta)
 
 wg.Wait()
 ```
