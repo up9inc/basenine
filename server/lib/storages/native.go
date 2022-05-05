@@ -357,9 +357,6 @@ func (storage *nativeStorage) PrepareQuery(query string, macros map[string]strin
 		return
 	}
 
-	// leftOff is the state to track the last offset's index in storage.offsets
-	// default value of leftOff is 0. leftOff(..) helper overrides it.
-	// can be -1 also, means that it's last record.
 	prop, err = basenine.Precompute(expr)
 	if err != nil {
 		log.Printf("Precompute error: %v\n", err)
