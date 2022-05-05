@@ -139,7 +139,7 @@ func TestQuery(t *testing.T) {
 	go handleMetaChannel(c, meta)
 	wg.Add(1)
 
-	err = c.Query(`chevy`, data, meta)
+	err = c.Query("", `chevy`, data, meta)
 	assert.Nil(t, err)
 
 	if waitTimeout(&wg, 20*time.Second) {
@@ -152,10 +152,11 @@ func TestFetch(t *testing.T) {
 		t.Skip("Skipping testing in CI environment")
 	}
 
-	data, meta, err := Fetch(HOST, PORT, fmt.Sprintf("%024d", 100), -1, `chevy`, 20, 20*time.Second)
+	data, firstMeta, lastMeta, err := Fetch(HOST, PORT, fmt.Sprintf("%024d", 100), -1, `chevy`, 20, 20*time.Second)
 	assert.Nil(t, err)
 
-	assert.Equal(t, fmt.Sprintf(`{"current":20,"total":15000,"numberOfWritten":19,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 79)), string(meta))
+	assert.Equal(t, fmt.Sprintf(`{"current":1,"total":15000,"numberOfWritten":0,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 98)), string(firstMeta))
+	assert.Equal(t, fmt.Sprintf(`{"current":20,"total":15000,"numberOfWritten":19,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 79)), string(lastMeta))
 
 	i := 0
 	for id := 99; id > 80; id-- {

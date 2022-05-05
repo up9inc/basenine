@@ -374,7 +374,7 @@ func (storage *nativeStorage) PrepareQuery(query string, macros map[string]strin
 // and filters out the records according to query.
 // It starts from the very beginning of the first living database partition.
 // Means that either the current partition or the partition before that.
-func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err error) {
+func (storage *nativeStorage) StreamRecords(conn net.Conn, _leftOff string, query string) (err error) {
 	var macros map[string]string
 	macros, err = storage.GetMacros()
 	if err != nil {
@@ -384,16 +384,15 @@ func (storage *nativeStorage) StreamRecords(conn net.Conn, data []byte) (err err
 
 	var expr *basenine.Expression
 	var prop basenine.Propagate
-	expr, prop, err = storage.PrepareQuery(string(data), macros)
+	expr, prop, err = storage.PrepareQuery(query, macros)
 	if err != nil {
 		conn.Close()
 		return
 	}
 
 	limit := prop.Limit
-	_leftOff := prop.LeftOff
 
-	leftOff, err := storage.handleNegativeLeftOff(_leftOff, 1)
+	leftOff, err := storage.handleSpecialLeftOff(_leftOff, 1)
 	if err != nil {
 		return
 	}
@@ -606,8 +605,7 @@ func (storage *nativeStorage) RetrieveSingle(conn net.Conn, index string, query 
 
 // ValidateQuery tries to parse the given query and checks if there are
 // any syntax errors or not.
-func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) (err error) {
-	query := string(data)
+func (storage *nativeStorage) ValidateQuery(conn net.Conn, query string) (err error) {
 	// Expand all macros in the query, if there are any.
 	storage.RLock()
 	macros := storage.macros
@@ -630,7 +628,7 @@ func (storage *nativeStorage) ValidateQuery(conn net.Conn, data []byte) (err err
 func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction string, query string, limit string) (err error) {
 	// Parse the arguments
 	var _leftOff int64
-	_leftOff, err = storage.handleNegativeLeftOff(leftOff, 0)
+	_leftOff, err = storage.handleSpecialLeftOff(leftOff, 0)
 	if err != nil {
 		conn.Write([]byte(fmt.Sprintf("Error: Cannot parse leftOff value to int: %s\n", err.Error())))
 		return
@@ -1165,8 +1163,8 @@ func (storage *nativeStorage) watchPartitions() (err error) {
 	return
 }
 
-// handleNegativeLeftOff handles negative leftOff value.
-func (storage *nativeStorage) handleNegativeLeftOff(_leftOff string, increment int64) (leftOff int64, err error) {
+// handleSpecialLeftOff handles negative leftOff value.
+func (storage *nativeStorage) handleSpecialLeftOff(_leftOff string, increment int64) (leftOff int64, err error) {
 	// If leftOff value is -1 then set it to last offset
 	if _leftOff == basenine.LATEST {
 		storage.RLock()
