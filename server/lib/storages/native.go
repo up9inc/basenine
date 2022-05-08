@@ -645,14 +645,6 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 		return
 	}
 
-	if _direction < 0 {
-		if _leftOff > 0 {
-			_leftOff--
-		}
-	} else {
-		_leftOff++
-	}
-
 	// Safely access the length of offsets slice.
 	storage.RLock()
 	l := len(storage.offsets) + int(storage.removedOffsetsCounter)

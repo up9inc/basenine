@@ -226,6 +226,7 @@ func Fetch(host string, port string, leftOff string, direction int, query string
 		case lastMeta = <-metaChan:
 			if len(firstMeta) == 0 {
 				firstMeta = lastMeta
+				break
 			}
 			receivedMeta = true
 			if receivedData {
