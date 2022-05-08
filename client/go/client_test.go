@@ -155,11 +155,11 @@ func TestFetch(t *testing.T) {
 	data, firstMeta, lastMeta, err := Fetch(HOST, PORT, fmt.Sprintf("%024d", 100), -1, `chevy`, 20, 20*time.Second)
 	assert.Nil(t, err)
 
-	assert.Equal(t, fmt.Sprintf(`{"current":1,"total":15000,"numberOfWritten":0,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 98)), string(firstMeta))
-	assert.Equal(t, fmt.Sprintf(`{"current":20,"total":15000,"numberOfWritten":19,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 79)), string(lastMeta))
+	assert.Equal(t, fmt.Sprintf(`{"current":1,"total":15000,"numberOfWritten":0,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 99)), string(firstMeta))
+	assert.Equal(t, fmt.Sprintf(`{"current":20,"total":15000,"numberOfWritten":19,"leftOff":"%s","truncatedTimestamp":0,"noMoreData":false}`, fmt.Sprintf("%024d", 80)), string(lastMeta))
 
 	i := 0
-	for id := 99; id > 80; id-- {
+	for id := 100; id > 80; id-- {
 		expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":"%s"}`, fmt.Sprintf("%024d", id-1), REDACTED)
 		assert.JSONEq(t, expected, string(data[i]))
 		i++

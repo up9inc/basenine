@@ -451,18 +451,18 @@ func TestServerProtocolFetchMode(t *testing.T) {
 						break
 					}
 
-					if row.direction < 0 {
-						index--
-					} else {
-						index++
-					}
-
 					if index >= total || index < 0 {
 						return
 					}
 
 					expected := fmt.Sprintf(`{"brand":{"name":"Chevrolet"},"id":"%s","model":"Camaro","year":2021}`, basenine.IndexToID(index))
 					assert.JSONEq(t, expected, string(bytes))
+
+					if row.direction < 0 {
+						index--
+					} else {
+						index++
+					}
 
 					counter++
 
