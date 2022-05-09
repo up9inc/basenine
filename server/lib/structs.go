@@ -10,7 +10,7 @@ import (
 )
 
 // Version of the software.
-const VERSION string = "0.8.1"
+const VERSION string = "0.8.2"
 
 type ConnectionMode int
 
