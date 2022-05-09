@@ -821,6 +821,8 @@ func (storage *nativeStorage) Fetch(conn net.Conn, leftOff string, direction str
 			numberOfWritten++
 		}
 	}
+
+	basenine.SendClose(conn)
 	return
 }
 
