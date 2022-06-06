@@ -109,6 +109,13 @@ func computeCallExpression(call *CallExpression, prependPath string, jsonHelperP
 				prop.Limit = _prop.Limit
 				return
 			}
+
+			// `request.body.json()..name` goes here
+			if call.SelectExpression.RecursiveDescent != nil {
+				if jsonHelperUsed {
+					prop.Path = fmt.Sprintf("..%s", *call.SelectExpression.RecursiveDescent)
+				}
+			}
 		}
 	} else {
 		// It's a function call

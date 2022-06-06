@@ -60,9 +60,10 @@ type CallExpression struct {
 }
 
 type SelectExpression struct {
-	Index      *int        `[ "[" @Int "]" ]`
-	Key        *string     `[ "[" @(String|Char|RawString|"*") "]" ]`
-	Expression *Expression `[ "." @@ ]`
+	Index            *int        `[ "[" @Int "]" ]`
+	Key              *string     `[ "[" @(String|Char|RawString|"*") "]" ]`
+	RecursiveDescent *string     `[ "." "." @Ident ]`
+	Expression       *Expression `[ "." @@ ]`
 }
 
 type Parameter struct {
