@@ -441,7 +441,7 @@ func redactXml(obj interface{}, path string) (xmlValue []byte, err error) {
 func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err error) {
 	newObj = obj
 	for i, path := range paths {
-		xmlPaths := strings.Split(path, ".xml().")
+		xmlPaths := strings.Split(path, ".xml()")
 
 		var jsonPath jp.Expr
 		jsonPath, err = jp.ParseString(xmlPaths[0])
@@ -526,7 +526,7 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 func redact(args ...interface{}) (interface{}, interface{}) {
 	obj := args[0]
 	for _, param := range args[2:] {
-		paths := strings.Split(stringOperand(param), ".json().")
+		paths := strings.Split(stringOperand(param), ".json()")
 		var err error
 		obj, err = redactRecursively(obj, paths)
 		if err != nil {
