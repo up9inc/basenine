@@ -500,7 +500,25 @@ func redactRecursively(obj interface{}, paths []string) (newObj interface{}, err
 			return
 		}
 
-		jsonPath.Set(newObj, REDACTED)
+		// If it's recursive descent, don't use `jp.(*Expr).Set`
+		// since it adds the given field to every depth.
+		if strings.HasPrefix(jsonPath.String(), "..") {
+			ref := jsonPath.String()[2:]
+			jp.Walk(newObj, func(path jp.Expr, value interface{}) {
+				frag := path[len(path)-1]
+				var buf []byte
+				if _, ok := frag.(jp.Bracket); ok {
+					return
+				}
+				buf = frag.Append(buf, false, true)
+				// Instead compare the field names directly by walking the object.
+				if string(buf) == ref {
+					path.Set(newObj, REDACTED)
+				}
+			})
+		} else {
+			jsonPath.Set(newObj, REDACTED)
+		}
 	}
 	return
 }
